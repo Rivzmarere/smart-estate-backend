@@ -18,6 +18,6 @@ class Complain(models.Model):
     date_updated = models.DateTimeField(auto_now_add=True)
     compalint_status = models.ForeignKey(ComplaintStatus, on_delete=models.CASCADE)
     assigned_to = models.ForeignKey(User, on_delete=models.CASCADE)
-    status = models.BooleanField(default=False)
+    status = models.BooleanField(default=True)
 
 

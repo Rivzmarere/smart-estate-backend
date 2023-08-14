@@ -11,7 +11,7 @@ class HomeReadSerializer(serializers.ModelSerializer):
 class HomeWriteSerializer(serializers.ModelSerializer):
     class Meta:
         model = Home
-        fields = ['owner','stand']
+        fields = ['owner','stand','home_status','authorized_by','resident']
         
 class HomeResidentUpdateSerializer(serializers.ModelSerializer):
     class Meta:

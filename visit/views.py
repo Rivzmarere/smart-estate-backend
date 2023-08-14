@@ -4,6 +4,7 @@ from .serializer import VisitReadSerializer, VisitWriteSerializer
 from rest_framework.generics import GenericAPIView
 from rest_framework.response import Response
 from rest_framework import status
+from visit.utilities import random_numbers,search_auth,search_home
 # Create your views here.
 
 class VisitList(GenericAPIView):
@@ -16,8 +17,15 @@ class VisitList(GenericAPIView):
     def post(self, request):
             serializer = VisitWriteSerializer(data=request.data)
             if serializer.is_valid():
-                serializer.save()
-                return Response(serializer.data, status=status.HTTP_201_CREATED)
+                is_visit_valid = search_auth(request.data["stand_number"],request.data["resident_phone_number"])
+                if (is_visit_valid == True):
+                    home_address =search_home(request.data["stand_number"])
+                    visit_code = random_numbers()
+                    serializer.save(visit_code=visit_code,home=home_address["address"])
+                    return Response(serializer.data, status=status.HTTP_201_CREATED)
+                else:
+                    message ={"Stand Number or Phone Numebr is Invalid"}
+                    return Response(data=message,status=status.HTTP_400_BAD_REQUEST)
             return Response(status=status.HTTP_400_BAD_REQUEST)
 
 class VisitPaginated(GenericAPIView):

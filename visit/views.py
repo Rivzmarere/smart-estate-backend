@@ -1,6 +1,6 @@
 import math
 from .models import Visit
-from .serializer import VisitReadSerializer, VisitWriteSerializer
+from .serializer import VisitBookOutSerializer, VisitBookinSerializer, VisitReadSerializer, VisitWriteSerializer
 from rest_framework.generics import GenericAPIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -33,11 +33,25 @@ class VisitPaginated(GenericAPIView):
     def get(self, request, format=None):
         sort = 'asc'
         page = int(request.GET.get('page',1))
+        search = request.GET.get('search')
+        transport_filter = request.GET.get('transport-filter')
+        status_filter = request.GET.get('status-filter')
         per_page = 5
 
         visits = Visit.objects.all()
+        if search:
+            visits = visits.filter(visitor_name__icontains = search)
+        
+        if transport_filter:
+            visits = visits.filter(transport_type = transport_filter)
+            
+        if status_filter:
+            visits = visits.filter(visit_status = status_filter)
+            
         if sort =='asc':
-            visits = visits.order_by('-dateCreated')
+            visits = visits.order_by('-date_created').filter(status=True)
+        
+        
         
         total = visits.count()
         start = (page - 1) * per_page
@@ -79,4 +93,40 @@ class VisitDetails(GenericAPIView):
             visit.delete()
             return Response(status=status.HTTP_204_NO_CONTENT)
 
+
+
+class VisitBookInUpdateDetails(GenericAPIView):
+    serializer_class = VisitReadSerializer
+    def getObject(self, id):
+        try:
+            return Visit.objects.get(pk=id)
+        except Visit.DoesNotExist:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        
+    def put(self, request, id, format=None):
+            visit = self.getObject(id)
+            serializer = VisitBookinSerializer(visit, data=request.data)
+            if serializer.is_valid():
+                serializer.save()
+                return Response(serializer.data, status=status.HTTP_201_CREATED)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+
+
+class VisitBookOutUpdateDetails(GenericAPIView):
+    serializer_class = VisitReadSerializer
+    def getObject(self, id):
+        try:
+            return Visit.objects.get(pk=id)
+        except Visit.DoesNotExist:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        
+    def put(self, request, id, format=None):
+            visit = self.getObject(id)
+            serializer = VisitBookOutSerializer(visit, data=request.data)
+            if serializer.is_valid():
+                serializer.save(status=False)
+                return Response(serializer.data, status=status.HTTP_201_CREATED)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
 

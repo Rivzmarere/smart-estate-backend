@@ -29,7 +29,7 @@ class ResidentPaginated(GenericAPIView):
 
         residents = Resident.objects.all()
         if sort =='asc':
-            residents = residents.order_by('-dateCreated')
+            residents = residents.order_by('-date_created')
         
         total = residents.count()
         start = (page - 1) * per_page

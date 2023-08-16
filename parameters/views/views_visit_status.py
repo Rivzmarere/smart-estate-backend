@@ -29,7 +29,7 @@ class VisitStatusPaginated(GenericAPIView):
 
         visit_status = VisitStatus.objects.all()
         if sort =='asc':
-           visit_status = visit_status.order_by('-dateCreated')
+           visit_status = visit_status.order_by('-date_created')
         
         total =visit_status.count()
         start = (page - 1) * per_page

@@ -29,7 +29,7 @@ class HomePaginated(GenericAPIView):
 
         homes = Home.objects.all()
         if sort =='asc':
-            homes = homes.order_by('-dateCreated')
+            homes = homes.order_by('-date_created')
         
         total = homes.count()
         start = (page - 1) * per_page

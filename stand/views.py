@@ -29,7 +29,7 @@ class StandPaginated(GenericAPIView):
 
         stands = Stand.objects.all()
         if sort =='asc':
-            stands = stands.order_by('-dateCreated')
+            stands = stands.order_by('-date_created')
         
         total = stands.count()
         start = (page - 1) * per_page

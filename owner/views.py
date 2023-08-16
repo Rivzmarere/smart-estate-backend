@@ -29,7 +29,7 @@ class OwnerPaginated(GenericAPIView):
 
         owners = Owner.objects.all()
         if sort =='asc':
-            owners = owners.order_by('-dateCreated')
+            owners = owners.order_by('-date_created')
         
         total = owners.count()
         start = (page - 1) * per_page

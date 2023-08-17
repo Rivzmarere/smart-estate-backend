@@ -18,9 +18,9 @@ class Owner(models.Model):
     nationality = models.ForeignKey(Nationality, on_delete=models.CASCADE)
     phone_number1 = models.CharField(max_length=20)
     phone_number2 = models.CharField(max_length=20)
-    email = models.CharField(max_length=20)
+    email = models.CharField(max_length=60)
     date_created = models.DateTimeField(auto_now_add=True)
-    date_edited = models.DateTimeField(auto_now_add=True)
-    status = models.BooleanField(default=False)
+    date_edited = models.DateTimeField(auto_now=True)
+    status = models.BooleanField(default=True)
     authorized_by = models.ForeignKey(User, on_delete=models.CASCADE)
 

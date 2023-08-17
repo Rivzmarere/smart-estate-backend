@@ -29,7 +29,7 @@ class ProviderCategoryPaginated(GenericAPIView):
 
         provider_category = ProviderCategory.objects.all()
         if sort =='asc':
-           provider_category = provider_category.order_by('-dateCreated')
+           provider_category = provider_category.order_by('-date_created')
         
         total =provider_category.count()
         start = (page - 1) * per_page

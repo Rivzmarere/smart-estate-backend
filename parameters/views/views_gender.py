@@ -26,10 +26,18 @@ class GenderPaginated(GenericAPIView):
         sort = 'asc'
         page = int(request.GET.get('page',1))
         per_page = 5
-
+        status_filter = request.GET.get('status')
+        search = request.GET.get('search')
         gender = Gender.objects.all()
+        
+        if search:
+            gender = gender.filter(name__icontains = search)
+              
+        if status_filter:
+            gender = gender.filter(status = status_filter)
+            
         if sort =='asc':
-            gender = gender.order_by('-dateCreated')
+            gender = gender.order_by('-date_created')
         
         total = gender.count()
         start = (page - 1) * per_page

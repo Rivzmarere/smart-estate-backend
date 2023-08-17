@@ -29,7 +29,7 @@ class UserTypePaginated(GenericAPIView):
 
         user_type = UserType.objects.all()
         if sort =='asc':
-           user_type = user_type.order_by('-dateCreated')
+           user_type = user_type.order_by('-date_created')
         
         total =user_type.count()
         start = (page - 1) * per_page

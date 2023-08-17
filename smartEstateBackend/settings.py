@@ -50,7 +50,7 @@ INSTALLED_APPS = [
     'complaint',
     'home',
     'owner',
-    'provider',
+    # 'provider',
     'resident',
     'stand',
     'visit',
@@ -69,6 +69,8 @@ MIDDLEWARE = [
     
     'corsheaders.middleware.CorsMiddleware',
 ]
+
+CORS_ALLOW_ALL_ORIGINS = True
 
 REST_FRAMEWORK = {
     

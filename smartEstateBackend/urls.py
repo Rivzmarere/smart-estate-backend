@@ -23,7 +23,7 @@ urlpatterns = [
     path('', include('complaint.url')),
     path('', include('home.url')),
     path('', include('owner.url')),
-    path('', include('provider.url')),
+    # path('', include('provider.url')),
     path('', include('resident.url')),
     path('', include('stand.url')),
     path('', include('visit.url')),

@@ -7,7 +7,7 @@ from .models import User
 class SignUpSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ["id","name","surname", "username", "password","role"]
+        fields = ["id", "username", "password","role"]
 
     def validate(self, attrs):
 
@@ -35,7 +35,7 @@ class SignUpSerializer(serializers.ModelSerializer):
 class ReadUserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ["id", "name",'surname',"role", "username",'is_active']
+        fields = ["id","role", "username",'is_active']
 
 
 
@@ -54,5 +54,5 @@ class UpdateUserSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ('username', 'name', 'surname')
+        fields = ('username',)
 

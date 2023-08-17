@@ -29,7 +29,7 @@ class NationalityPaginated(GenericAPIView):
 
         nationality = Nationality.objects.all()
         if sort =='asc':
-           nationality =nationality.order_by('-dateCreated')
+           nationality =nationality.order_by('-date_created')
         
         total =nationality.count()
         start = (page - 1) * per_page

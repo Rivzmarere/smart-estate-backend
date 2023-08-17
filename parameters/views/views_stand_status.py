@@ -29,7 +29,7 @@ class StandStatusPaginated(GenericAPIView):
 
         stand_status = StandStatus.objects.all()
         if sort =='asc':
-           stand_status = stand_status.order_by('-dateCreated')
+           stand_status = stand_status.order_by('-date_created')
         
         total =stand_status.count()
         start = (page - 1) * per_page

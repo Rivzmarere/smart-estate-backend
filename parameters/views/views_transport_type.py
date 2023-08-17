@@ -29,7 +29,7 @@ class TransportTypePaginated(GenericAPIView):
 
         transport_type = TransportType.objects.all()
         if sort =='asc':
-           transport_type = transport_type.order_by('-dateCreated')
+           transport_type = transport_type.order_by('-date_created')
         
         total =transport_type.count()
         start = (page - 1) * per_page

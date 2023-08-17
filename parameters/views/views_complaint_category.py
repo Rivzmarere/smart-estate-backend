@@ -29,7 +29,7 @@ class ComplaintCategorysPaginated(GenericAPIView):
 
         complaint_category = ComplaintCategory.objects.all()
         if sort =='asc':
-            complaint_category = complaint_category.order_by('-dateCreated')
+            complaint_category = complaint_category.order_by('-date_created')
         
         total = complaint_category.count()
         start = (page - 1) * per_page

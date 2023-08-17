@@ -29,7 +29,7 @@ class ProviderStatusPaginated(GenericAPIView):
 
         provider_status = ProviderStatus.objects.all()
         if sort =='asc':
-           provider_status = provider_status.order_by('-dateCreated')
+           provider_status = provider_status.order_by('-date_created')
         
         total =provider_status.count()
         start = (page - 1) * per_page

@@ -4,7 +4,7 @@ from .serializer import VisitBookOutSerializer, VisitBookinSerializer, VisitRead
 from rest_framework.generics import GenericAPIView
 from rest_framework.response import Response
 from rest_framework import status
-from visit.utilities import random_numbers,search_auth,search_home
+from .utilities import random_numbers,search_auth,search_home
 # Create your views here.
 
 class VisitList(GenericAPIView):

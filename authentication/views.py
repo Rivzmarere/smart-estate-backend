@@ -35,13 +35,6 @@ class SignUpView(GenericAPIView):
 
         return Response(data=serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-class GetAgents(GenericAPIView):
-    serializer_class = ReadUserSerializer
-    def get(self, request, format=None):
-        sales = User.objects.all()
-        sales = sales.filter(role ='Driver')
-        serializer = ReadUserSerializer(sales, many=True)
-        return Response({'data':serializer.data},status=status.HTTP_200_OK)
 
 
 class AllUserList(GenericAPIView):
@@ -67,29 +60,19 @@ class AllUserList(GenericAPIView):
 
         })
 
-class AllDriverList(GenericAPIView):
-    serializer_class = ReadUserSerializer 
-    def get(self, request, format=None):
-        sort = request.GET.get('sort')
-        page = int(request.GET.get('page',1))
-        per_page = 9
-        users = User.objects.all()
-        if sort =='asc':
-            users = users.order_by('date_joined').filter(role='Driver')
+
+class UserDetails(GenericAPIView):
+    serializer_class = ReadUserSerializer
+    def getObject(self, id):
+        try:
+            return User.objects.get(pk=id)
+        except User.DoesNotExist:
+            return Response(status=status.HTTP_404_NOT_FOUND)
         
-        total = users.count()
-        start = (page - 1) * per_page
-        end = page * per_page
-
-        serializer = ReadUserSerializer(users[start:end], many=True)
-        return Response({
-            'data':serializer.data,
-            'total': total,
-            'page':page,
-            'last_page':math.ceil(total / per_page)
-
-        })
-
+    def get(self, request, id, format=None):
+            complain = self.getObject(id)
+            serializer = ReadUserSerializer(complain)
+            return Response(serializer.data, status=status.HTTP_200_OK)
 
 
 class MyTokenObtainPairSerializer(TokenObtainPairSerializer):

@@ -4,6 +4,7 @@ from .serializer import ResidentReadSerializer, ResidentWriteSerializer
 from rest_framework.generics import GenericAPIView
 from rest_framework.response import Response
 from rest_framework import status
+from django.db.models import Q
 # Create your views here.
 
 class ResidentList(GenericAPIView):
@@ -25,11 +26,17 @@ class ResidentPaginated(GenericAPIView):
     def get(self, request, format=None):
         sort = 'asc'
         page = int(request.GET.get('page',1))
+        search = request.GET.get('search')
+        status_filter = request.GET.get('status')
         per_page = 5
 
         residents = Resident.objects.all()
-        if sort =='asc':
-            residents = residents.order_by('-date_created')
+        if search:
+            residents = residents.filter(Q(name__icontains = search) | Q(surname__icontains = search) | Q(id_number__icontains = search))
+        
+        if status_filter:
+            residents = residents.filter(status = status_filter)
+            
         
         total = residents.count()
         start = (page - 1) * per_page

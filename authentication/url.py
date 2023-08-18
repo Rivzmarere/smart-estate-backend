@@ -6,12 +6,14 @@ from rest_framework_simplejwt.views import (
 
 from authentication.views import MyTokenObtainPairView
 
-from .views import SignUpView,GetAgents
+from .views import SignUpView,UserDetails,AllUserList
 
 urlpatterns = [
     path('token',MyTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
-    path('drivers-list', GetAgents.as_view()),
-    path("auth/signUp",SignUpView.as_view(), name='signUp'),
+    path('users-all', AllUserList.as_view()),
+    path('users-paginated', AllUserList.as_view()),
+    path("users-signUp",SignUpView.as_view(), name='signUp'),
+    path("users-details/<int:id>",UserDetails.as_view(), name='signUp'),
 
 ]

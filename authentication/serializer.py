@@ -35,7 +35,7 @@ class SignUpSerializer(serializers.ModelSerializer):
 class ReadUserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ["id","role", "username",'is_active']
+        fields = ["id","role", "username",'is_active','first_name','last_name','date_joined']
 
 
 

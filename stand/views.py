@@ -25,11 +25,19 @@ class StandPaginated(GenericAPIView):
     def get(self, request, format=None):
         sort = 'asc'
         page = int(request.GET.get('page',1))
+        search = request.GET.get('search')
+        stand_status = request.GET.get('stand-status')
         per_page = 5
 
         stands = Stand.objects.all()
+        if search:
+            stands = stands.filter(stand_number__icontains = search)
+            
+        if stand_status:
+            stands = stands.filter(stand_status = stand_status)
+            
         if sort =='asc':
-            stands = stands.order_by('-date_created')
+            stands = stands.order_by('-date_created').filter(status=True)
         
         total = stands.count()
         start = (page - 1) * per_page

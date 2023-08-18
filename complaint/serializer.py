@@ -11,5 +11,5 @@ class ComplainReadSerializer(serializers.ModelSerializer):
 class ComplainWriteSerializer(serializers.ModelSerializer):
     class Meta:
         model = Complain
-        exclude = ['assigned_to']
+        fields = ["stand_number","resident_phone_number", "description","complaint_category","compalint_status","assigned_to"]
         

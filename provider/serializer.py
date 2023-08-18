@@ -11,5 +11,5 @@ class ProviderReadSerializer(serializers.ModelSerializer):
 class ProviderWriteSerializer(serializers.ModelSerializer):
     class Meta:
         model = Provider
-        exclude = ['stand_number','resident_phone_number','service_description','provider_category']
+        fields = '__all__'
         

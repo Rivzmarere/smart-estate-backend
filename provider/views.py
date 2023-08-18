@@ -4,6 +4,7 @@ from .serializer import ProviderReadSerializer, ProviderWriteSerializer
 from rest_framework.generics import GenericAPIView
 from rest_framework.response import Response
 from rest_framework import status
+from django.db.models import Q
 # Create your views here.
 
 class ProviderList(GenericAPIView):
@@ -25,9 +26,12 @@ class ProviderPaginated(GenericAPIView):
     def get(self, request, format=None):
         sort = 'asc'
         page = int(request.GET.get('page',1))
+        search = request.GET.get('search')
         per_page = 5
 
         providers = Provider.objects.all()
+        if search:
+            providers = providers.filter(Q(name__icontains = search) | Q(surname__icontains = search) | Q(provider_category__name__icontains = search))
         if sort =='asc':
             providers = providers.order_by('-date_created')
         

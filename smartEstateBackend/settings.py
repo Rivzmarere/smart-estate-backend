@@ -50,11 +50,12 @@ INSTALLED_APPS = [
     'complaint',
     'home',
     'owner',
-    # 'provider',
+    'provider',
     'resident',
     'stand',
     'visit',
-    'parameters'
+    'parameters',
+    'whitelist'
     
 ]
 

@@ -4,6 +4,7 @@ from .serializer import HomeReadSerializer, HomeWriteSerializer
 from rest_framework.generics import GenericAPIView
 from rest_framework.response import Response
 from rest_framework import status
+from django.db.models import Q
 # Create your views here.
 
 class HomeList(GenericAPIView):
@@ -25,11 +26,19 @@ class HomePaginated(GenericAPIView):
     def get(self, request, format=None):
         sort = 'asc'
         page = int(request.GET.get('page',1))
+        search = request.GET.get('search')
+        status_filter = request.GET.get('status')
         per_page = 5
 
         homes = Home.objects.all()
+        if search:
+            homes = homes.filter(Q(owner__name__icontains = search) | Q(stand__stand_number__icontains = search) | Q(resident__name__icontains = search) | Q(resident__surname__icontains = search) | Q(owner__surname__icontains = search) | Q(address__icontains = search))
+        
+        if status_filter:
+            homes = homes.filter(home_status = status_filter)
+            
         if sort =='asc':
-            homes = homes.order_by('-date_created')
+            homes = homes.order_by('-date_created').filter(status=True)
         
         total = homes.count()
         start = (page - 1) * per_page

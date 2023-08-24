@@ -11,5 +11,17 @@ class ComplainReadSerializer(serializers.ModelSerializer):
 class ComplainWriteSerializer(serializers.ModelSerializer):
     class Meta:
         model = Complain
-        fields = ["stand_number","resident_phone_number", "description","complaint_category","compalint_status","assigned_to"]
+        fields = ["stand_number","resident_phone_number", "description","complaint_category","compalint_status"]
+        
+
+class ComplainAssignUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Complain
+        fields = ["assigned_to","compalint_status"]
+
+
+class ComplainUpdateStatusSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Complain
+        fields = ["compalint_status"]
         

@@ -22,7 +22,12 @@ class VisitList(GenericAPIView):
                     home_address =search_home(request.data["stand_number"])
                     visit_code = random_numbers()
                     serializer.save(visit_code=visit_code,home=home_address["address"])
-                    return Response(serializer.data, status=status.HTTP_201_CREATED)
+                    return Response({
+                        "data":{
+                            "visit_code":visit_code,
+                            "Visitor_name":request.data["visitor_name"]
+                            }
+                        }, status=status.HTTP_201_CREATED)
                 else:
                     message ={"Stand Number or Phone Numebr is Invalid"}
                     return Response(data=message,status=status.HTTP_400_BAD_REQUEST)

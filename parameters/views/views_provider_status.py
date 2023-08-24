@@ -25,9 +25,17 @@ class ProviderStatusPaginated(GenericAPIView):
     def get(self, request, format=None):
         sort = 'asc'
         page = int(request.GET.get('page',1))
+        status_filter = request.GET.get('status')
+        search = request.GET.get('search')
         per_page = 5
 
         provider_status = ProviderStatus.objects.all()
+        
+        if search:
+            provider_status = provider_status.filter(name__icontains = search)
+              
+        if status_filter:
+            provider_status = provider_status.filter(status = status_filter)
         if sort =='asc':
            provider_status = provider_status.order_by('-date_created')
         

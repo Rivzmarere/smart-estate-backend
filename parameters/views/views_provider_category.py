@@ -25,9 +25,17 @@ class ProviderCategoryPaginated(GenericAPIView):
     def get(self, request, format=None):
         sort = 'asc'
         page = int(request.GET.get('page',1))
+        status_filter = request.GET.get('status')
+        search = request.GET.get('search')
         per_page = 5
 
         provider_category = ProviderCategory.objects.all()
+        
+        if search:
+            provider_category = provider_category.filter(name__icontains = search)
+              
+        if status_filter:
+            provider_category = provider_category.filter(status = status_filter)
         if sort =='asc':
            provider_category = provider_category.order_by('-date_created')
         

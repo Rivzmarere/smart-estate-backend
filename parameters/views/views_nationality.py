@@ -25,9 +25,17 @@ class NationalityPaginated(GenericAPIView):
     def get(self, request, format=None):
         sort = 'asc'
         page = int(request.GET.get('page',1))
+        status_filter = request.GET.get('status')
+        search = request.GET.get('search')
         per_page = 5
 
         nationality = Nationality.objects.all()
+        
+        if search:
+            nationality = nationality.filter(name__icontains = search)
+              
+        if status_filter:
+            nationality = nationality.filter(status = status_filter)
         if sort =='asc':
            nationality =nationality.order_by('-date_created')
         

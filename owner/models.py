@@ -9,7 +9,6 @@ from stand.models import Stand
 # Create your models here.
 
 class Owner(models.Model):
-    stand = models.ForeignKey(Stand, on_delete=models.CASCADE)
     name = models.CharField(max_length=20)
     surname = models.CharField(max_length=20)
     id_number = models.CharField(max_length=20)

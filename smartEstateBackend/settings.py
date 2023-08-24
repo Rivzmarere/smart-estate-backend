@@ -55,7 +55,8 @@ INSTALLED_APPS = [
     'stand',
     'visit',
     'parameters',
-    'whitelist'
+    'whitelist',
+    'chatbot'
     
 ]
 

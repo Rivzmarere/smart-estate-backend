@@ -40,6 +40,14 @@ class SignUpView(GenericAPIView):
 class AllUserList(GenericAPIView):
     serializer_class = ReadUserSerializer 
     def get(self, request, format=None):
+        users = User.objects.all()
+        serializer = ReadUserSerializer(users, many=True)
+        return Response(
+            serializer.data, status=status.HTTP_200_OK)
+
+class AllUserPaginated(GenericAPIView):
+    serializer_class = ReadUserSerializer 
+    def get(self, request, format=None):
         sort = request.GET.get('sort')
         page = int(request.GET.get('page',1))
         per_page = 9
@@ -59,7 +67,6 @@ class AllUserList(GenericAPIView):
             'last_page':math.ceil(total / per_page)
 
         })
-
 
 class UserDetails(GenericAPIView):
     serializer_class = ReadUserSerializer

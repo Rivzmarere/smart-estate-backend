@@ -25,9 +25,17 @@ class HomeStatusPaginated(GenericAPIView):
     def get(self, request, format=None):
         sort = 'asc'
         page = int(request.GET.get('page',1))
+        status_filter = request.GET.get('status')
+        search = request.GET.get('search')
         per_page = 5
 
         home_status = HomeStatus.objects.all()
+        
+        if search:
+            home_status = home_status.filter(name__icontains = search)
+              
+        if status_filter:
+            home_status = home_status.filter(status = status_filter)
         if sort =='asc':
             home_status = home_status.order_by('-date_created')
         

@@ -25,9 +25,17 @@ class VisitStatusPaginated(GenericAPIView):
     def get(self, request, format=None):
         sort = 'asc'
         page = int(request.GET.get('page',1))
+        status_filter = request.GET.get('status')
+        search = request.GET.get('search')
         per_page = 5
 
         visit_status = VisitStatus.objects.all()
+        
+        if search:
+            visit_status = visit_status.filter(name__icontains = search)
+              
+        if status_filter:
+            visit_status = visit_status.filter(status = status_filter)
         if sort =='asc':
            visit_status = visit_status.order_by('-date_created')
         

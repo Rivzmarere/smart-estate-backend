@@ -25,9 +25,17 @@ class StandStatusPaginated(GenericAPIView):
     def get(self, request, format=None):
         sort = 'asc'
         page = int(request.GET.get('page',1))
+        status_filter = request.GET.get('status')
+        search = request.GET.get('search')
         per_page = 5
 
         stand_status = StandStatus.objects.all()
+        
+        if search:
+            stand_status = stand_status.filter(name__icontains = search)
+              
+        if status_filter:
+            stand_status = stand_status.filter(status = status_filter)
         if sort =='asc':
            stand_status = stand_status.order_by('-date_created')
         

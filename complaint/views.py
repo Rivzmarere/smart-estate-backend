@@ -1,6 +1,6 @@
 import math
 from .models import Complain
-from .serializer import ComplainReadSerializer, ComplainWriteSerializer
+from .serializer import ComplainReadSerializer, ComplainWriteSerializer,ComplainAssignUpdateSerializer,ComplainUpdateStatusSerializer
 from rest_framework.generics import GenericAPIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -23,7 +23,11 @@ class ComplainList(GenericAPIView):
                     home_address =search_home(request.data["stand_number"])
                     complain_code = random_numbers()
                     serializer.save(complain_code=complain_code,home=home_address["address"])
-                    return Response(serializer.data, status=status.HTTP_201_CREATED)
+                    return Response({
+                        "data":{
+                            "visit_code":complain_code,
+                            }
+                        }, status=status.HTTP_201_CREATED)
                 else:
                     message ={"Stand Number or Phone Numebr is Invalid"}
                     return Response(data=message,status=status.HTTP_400_BAD_REQUEST)
@@ -79,5 +83,41 @@ class ComplainDetails(GenericAPIView):
             complain = self.getObject(id)
             complain.delete()
             return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class ComplainAssignDetails(GenericAPIView):
+    serializer_class = ComplainReadSerializer
+    def getObject(self, id):
+        try:
+            return Complain.objects.get(pk=id)
+        except Complain.DoesNotExist:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        
+    def put(self, request, id, format=None):
+            complain = self.getObject(id)
+            serializer = ComplainAssignUpdateSerializer(complain, data=request.data)
+            if serializer.is_valid():
+                serializer.save()
+                return Response(serializer.data, status=status.HTTP_201_CREATED)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+
+class ComplainUpdateStatusDetails(GenericAPIView):
+    serializer_class = ComplainReadSerializer
+    def getObject(self, id):
+        try:
+            return Complain.objects.get(pk=id)
+        except Complain.DoesNotExist:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        
+    def put(self, request, id, format=None):
+            complain = self.getObject(id)
+            serializer = ComplainUpdateStatusSerializer(complain, data=request.data)
+            if serializer.is_valid():
+                serializer.save()
+                return Response(serializer.data, status=status.HTTP_201_CREATED)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 
 

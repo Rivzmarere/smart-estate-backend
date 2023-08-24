@@ -25,9 +25,17 @@ class UserTypePaginated(GenericAPIView):
     def get(self, request, format=None):
         sort = 'asc'
         page = int(request.GET.get('page',1))
+        status_filter = request.GET.get('status')
+        search = request.GET.get('search')
         per_page = 5
 
         user_type = UserType.objects.all()
+        
+        if search:
+            user_type = user_type.filter(name__icontains = search)
+              
+        if status_filter:
+            user_type = user_type.filter(status = status_filter)
         if sort =='asc':
            user_type = user_type.order_by('-date_created')
         

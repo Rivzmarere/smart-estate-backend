@@ -1,6 +1,6 @@
 import math
 from .models import Home
-from .serializer import HomeReadSerializer, HomeWriteSerializer
+from .serializer import HomeReadSerializer, HomeWriteSerializer,HomeStatusUpdateSerializer
 from rest_framework.generics import GenericAPIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -69,7 +69,7 @@ class HomeDetails(GenericAPIView):
 
     def put(self, request, id, format=None):
             home = self.getObject(id)
-            serializer = HomeReadSerializer(home, data=request.data)
+            serializer = HomeStatusUpdateSerializer(home, data=request.data)
             if serializer.is_valid():
                 serializer.save()
                 return Response(serializer.data, status=status.HTTP_201_CREATED)

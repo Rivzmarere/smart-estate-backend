@@ -179,3 +179,73 @@ class PhoneVariantTests(APITestCase):
         self.assertIn("0772111111", phone_variants("+263772111111"))
         self.assertIn("+263772111111", phone_variants("0772 111 111"))
         self.assertEqual(phone_variants(""), set())
+
+
+class GateScreenTests(EstateFixture):
+    def setUp(self):
+        super().setUp()
+        self.inside = VisitStatus.objects.create(name="Inside")
+        self.departed = VisitStatus.objects.create(name="departed")
+        code = self.client.post("/visit", self.booking(101, "0772111111")).data["data"]["visit_code"]
+        self.visit = Visit.objects.get(visit_code=code)
+        self.client.force_authenticate(self.guard)
+
+    def test_expected_list(self):
+        response = self.client.get("/gate/expected")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["data"][0]["visit_code"], self.visit.visit_code)
+        self.assertEqual(response.data["data"][0]["transport"], "Car")
+
+    def test_anonymous_blocked(self):
+        self.client.force_authenticate(None)
+        self.assertEqual(self.client.get("/gate/expected").status_code, 401)
+
+    def test_book_in_and_out(self):
+        response = self.client.post(f"/gate/visits/{self.visit.id}/book-in", {"visitor_national_id": "63-222222 d22"})
+        self.assertEqual(response.status_code, 201)
+        self.visit.refresh_from_db()
+        self.assertEqual(self.visit.visit_status, self.inside)
+        self.assertEqual(self.visit.visitor_national_id, "63-222222 D22")
+        self.assertEqual(self.visit.authorized_by, self.guard)
+
+        response = self.client.post(f"/gate/visits/{self.visit.id}/book-out", {})
+        self.assertEqual(response.status_code, 201)
+        self.visit.refresh_from_db()
+        self.assertEqual(self.visit.visit_status, self.departed)
+        self.assertFalse(self.visit.status)
+        self.assertGreaterEqual(self.visit.date_depature, self.visit.date_arrived)
+        self.assertEqual(self.client.get("/gate/expected").data["data"], [])
+
+    def test_replayed_actions_are_harmless(self):
+        url = f"/gate/visits/{self.visit.id}/book-in"
+        first = self.client.post(url, {"visitor_national_id": "63-222222D22"})
+        arrived = Visit.objects.get(id=self.visit.id).date_arrived
+        again = self.client.post(url, {"visitor_national_id": "63-222222D22"})
+        self.assertEqual(first.status_code, 201)
+        self.assertEqual(again.status_code, 200)
+        self.assertTrue(again.data["already"])
+        self.assertEqual(Visit.objects.get(id=self.visit.id).date_arrived, arrived)
+
+    def test_offline_time_is_kept(self):
+        from django.utils import timezone
+        earlier = timezone.now() - datetime.timedelta(minutes=40)
+        self.client.post(f"/gate/visits/{self.visit.id}/book-in", {"visitor_national_id": "63-222222D22", "at": earlier.isoformat()})
+        self.visit.refresh_from_db()
+        self.assertAlmostEqual(self.visit.date_arrived.timestamp(), earlier.timestamp(), delta=1)
+
+    def test_future_or_ancient_times_rejected(self):
+        from django.utils import timezone
+        url = f"/gate/visits/{self.visit.id}/book-in"
+        future = (timezone.now() + datetime.timedelta(hours=1)).isoformat()
+        ancient = (timezone.now() - datetime.timedelta(days=5)).isoformat()
+        self.assertEqual(self.client.post(url, {"visitor_national_id": "63-2D22", "at": future}).status_code, 400)
+        self.assertEqual(self.client.post(url, {"visitor_national_id": "63-2D22", "at": ancient}).status_code, 400)
+
+    def test_id_number_required(self):
+        response = self.client.post(f"/gate/visits/{self.visit.id}/book-in", {})
+        self.assertEqual(response.status_code, 400)
+
+    def test_cancelled_booking_cannot_enter(self):
+        Visit.objects.filter(id=self.visit.id).update(status=False)
+        response = self.client.post(f"/gate/visits/{self.visit.id}/book-in", {"visitor_national_id": "63-222222D22"})
+        self.assertEqual(response.status_code, 409)

@@ -155,6 +155,16 @@ class PlatformTests(TwoEstates):
         user = User.objects.get(username="mph_admin")
         self.assertEqual((user.role, user.estate_id), ("Admin", estate_id))
 
+    def test_switched_off_estate_loses_access(self):
+        self.client.force_authenticate(self.platform)
+        self.client.patch(f"/estates/{self.estate_b.id}", {"active": False}, format="json")
+        self.client.force_authenticate(None)
+        login = self.client.post("/token", {"username": "admin_b", "password": "S3cure-pass!"}, format="json")
+        self.assertEqual(login.status_code, 401)
+        self.client.force_authenticate(User.objects.get(pk=self.admin_b.pk))  # an old token still in use
+        self.assertEqual(self.client.get("/home").json(), [])
+        self.assertEqual(self.client.get("/estate/public?estate=borrowdale").status_code, 404)
+
     def test_platform_sees_all_or_one_estate(self):
         self.client.force_authenticate(self.platform)
         self.assertEqual(len(self.client.get("/home").json()), 3)

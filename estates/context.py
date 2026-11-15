@@ -57,7 +57,7 @@ def _resolve(request):
     requested = request.META.get(HEADER) or request.GET.get("estate")
     if user is not None and user.is_authenticated:
         if getattr(user, "estate_id", None):
-            return user.estate
+            return user.estate if user.estate.active else None  # switched-off estate: no data
         if user.is_superuser:
             return _by_slug(requested) if requested else ALL
         return _only_estate()

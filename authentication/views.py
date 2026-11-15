@@ -4,6 +4,7 @@ from rest_framework.generics import GenericAPIView
 from rest_framework.request import Request
 from rest_framework.response import Response
 from .models import User
+from rest_framework.exceptions import AuthenticationFailed
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.views import TokenObtainPairView
 from django.contrib.auth.password_validation import validate_password
@@ -112,6 +113,8 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
 
     def validate(self, attrs):
         data = super().validate(attrs)
+        if self.user.estate_id and not self.user.estate.active:
+            raise AuthenticationFailed("This estate's account is switched off. Please contact Smart Estate.")
         # Guards stay logged in for a whole 12-hour shift so the gate tablet keeps syncing.
         if self.user.role == ROLE_GUARD:
             refresh = self.get_token(self.user)

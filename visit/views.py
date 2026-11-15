@@ -6,6 +6,7 @@ from .serializer import VisitBookOutSerializer, VisitBookinSerializer, VisitRead
 from rest_framework.generics import GenericAPIView
 from rest_framework.response import Response
 from rest_framework import status
+from whatsapp.notifications import notify_visitor_arrived
 from .utilities import random_numbers,search_auth,search_home
 from django.shortcuts import get_object_or_404
 from smartEstateBackend.permissions import IsAdminOrGuard, PublicCreateStaffRead
@@ -117,10 +118,11 @@ class VisitBookInUpdateDetails(GenericAPIView):
             visit = self.getObject(id)
             serializer = VisitBookinSerializer(visit, data=request.data)
             if serializer.is_valid():
-                serializer.save(
+                visit = serializer.save(
                     authorized_by=request.user,
                     date_arrived=serializer.validated_data.get("date_arrived") or timezone.now(),
                 )
+                notify_visitor_arrived(visit)
                 return Response(serializer.data, status=status.HTTP_201_CREATED)
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         

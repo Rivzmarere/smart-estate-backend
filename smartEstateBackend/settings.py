@@ -61,6 +61,7 @@ INSTALLED_APPS = [
     "parameters",
     "whitelist",
     "chatbot",
+    "whatsapp",
 ]
 
 MIDDLEWARE = [
@@ -161,6 +162,20 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
+
+# WhatsApp Cloud API (see whatsapp/client.py and .env.example)
+WHATSAPP_ENABLED = env_bool("WHATSAPP_ENABLED", False)
+WHATSAPP_DRY_RUN = env_bool("WHATSAPP_DRY_RUN", DEBUG)
+WHATSAPP_TOKEN = os.environ.get("WHATSAPP_TOKEN", "")
+WHATSAPP_PHONE_NUMBER_ID = os.environ.get("WHATSAPP_PHONE_NUMBER_ID", "")
+WHATSAPP_VERIFY_TOKEN = os.environ.get("WHATSAPP_VERIFY_TOKEN", "")
+WHATSAPP_APP_SECRET = os.environ.get("WHATSAPP_APP_SECRET", "")
+WHATSAPP_API_VERSION = os.environ.get("WHATSAPP_API_VERSION", "v23.0")
+WHATSAPP_TEMPLATE_VISITOR_ARRIVED = os.environ.get("WHATSAPP_TEMPLATE_VISITOR_ARRIVED", "")
+if WHATSAPP_ENABLED and not DEBUG:
+    missing = [name for name in ("WHATSAPP_TOKEN", "WHATSAPP_PHONE_NUMBER_ID", "WHATSAPP_VERIFY_TOKEN", "WHATSAPP_APP_SECRET") if not globals()[name]]
+    if missing:
+        raise ImproperlyConfigured(f"WhatsApp is enabled but these are not set: {', '.join(missing)}")
 
 # Production hardening (active whenever DEBUG is off).
 if not DEBUG:

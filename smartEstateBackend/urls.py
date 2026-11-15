@@ -29,5 +29,5 @@ urlpatterns = [
     path('', include('visit.url')),
     path('', include('whitelist.url')),
     path('', include('parameters.url')),
-    path('', include('chatbot.url')),
+    path('', include('whatsapp.url')),
 ]

@@ -14,6 +14,8 @@ from parameters.models.models_transport_type import TransportType
 from visit.models import Visit
 from visit.tests import EstateFixture
 
+from sms import sender as sms
+
 from . import client
 from .models import MessageLog, WhatsAppSession
 
@@ -36,6 +38,7 @@ class WhatsAppBotTests(EstateFixture):
     def setUp(self):
         super().setUp()
         client.OUTBOX.clear()
+        sms.OUTBOX.clear()
         self.walking = TransportType.objects.create(name="Walking")
         ComplaintStatus.objects.create(name="Pending")
         self.drainage = ComplaintCategory.objects.create(name="Drainage")
@@ -74,9 +77,11 @@ class WhatsAppBotTests(EstateFixture):
             return [b["reply"]["id"] for b in action["buttons"]]
         return [row["id"] for section in action["sections"] for row in section["rows"]]
 
-    def book(self, wa_id=RESIDENT_A, name="Chipo Banda", transport=None, reg="ABC 1234"):
+    def book(self, wa_id=RESIDENT_A, name="Chipo Banda", transport=None, reg="ABC 1234", visitor_phone="skip"):
         self.tap(wa_id, "book")
         reply = self.text(wa_id, name)
+        self.assertIn("mobile number", self.body(reply))
+        reply = self.text(wa_id, visitor_phone)
         transport = transport or self.transport
         self.assertIn(f"tr_{transport.id}", self.choice_ids(reply))
         reply = self.tap(wa_id, f"tr_{transport.id}")
@@ -194,13 +199,30 @@ class WhatsAppBotTests(EstateFixture):
         self.assertEqual(client.OUTBOX[0]["to"], RESIDENT_A)
         self.assertIn("arrived at the gate", self.body(client.OUTBOX[0]))
 
-    def test_no_message_outside_24h_window_without_template(self):
+    def test_sms_fallback_outside_24h_window_without_template(self):
         visit = self.book()
         WhatsAppSession.objects.filter(wa_id=RESIDENT_A).update(last_inbound_at=timezone.now() - timedelta(days=2))
         client.OUTBOX.clear()
         self.client.force_authenticate(self.guard)
         self.client.put(f"/visit-book-in/{visit.id}", {"visitor_national_id": "63-222222D22", "visit_status": self.visit_status.id})
         self.assertEqual(client.OUTBOX, [])
+        self.assertEqual(sms.OUTBOX[-1]["to"], "+263772111111")
+        self.assertIn("arrived at the gate", sms.OUTBOX[-1]["message"])
+
+    def test_visitor_gets_code_by_sms(self):
+        visit = self.book(visitor_phone="0712 345 678")
+        self.assertEqual(visit.visitor_phone_number, "+263712345678")
+        self.assertEqual(sms.OUTBOX[-1]["to"], "+263712345678")
+        self.assertIn(visit.visit_code, sms.OUTBOX[-1]["message"])
+        self.assertIn("Rudo", sms.OUTBOX[-1]["message"])
+        self.assertIn("sent the code", self.body(client.OUTBOX[-2]))
+
+    def test_bad_visitor_number_asked_again(self):
+        self.tap(RESIDENT_A, "book")
+        self.text(RESIDENT_A, "Chipo Banda")
+        reply = self.text(RESIDENT_A, "+44 7700 900123")
+        self.assertIn("Zimbabwean mobile", self.body(reply))
+        self.assertEqual(sms.OUTBOX, [])
 
     @override_settings(WHATSAPP_TEMPLATE_VISITOR_ARRIVED="visitor_arrived")
     def test_template_used_outside_24h_window(self):

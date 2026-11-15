@@ -19,6 +19,8 @@ from parameters.models.models_transport_type import TransportType
 from parameters.models.models_visit_status import VisitStatus
 from resident.models import Resident
 from visit.models import Visit
+from sms.sender import zimbabwe_mobile
+from visit.messaging import send_code_to_visitor
 from visit.utilities import phone_variants, random_numbers
 
 from . import client
@@ -26,6 +28,7 @@ from .models import WhatsAppSession
 
 MENU = "menu"
 BOOK_NAME = "book_name"
+BOOK_VISITOR_PHONE = "book_visitor_phone"
 BOOK_TRANSPORT = "book_transport"
 BOOK_VEHICLE = "book_vehicle"
 BOOK_CONFIRM = "book_confirm"
@@ -186,6 +189,28 @@ def handle_book_name(session, home, text, choice):
         client.send_text(session.wa_id, "Please type your visitor's full name.")
         return
     session.data["visitor_name"] = name[:MAX_NAME_LENGTH]
+    session.state = BOOK_VISITOR_PHONE
+    session.save()
+    client.send_text(
+        session.wa_id,
+        f"What is {name}'s mobile number? I'll SMS them the gate code.\n(Type *skip* to forward the code yourself.)",
+    )
+
+
+def handle_book_visitor_phone(session, home, text, choice):
+    if text.lower() in SKIP_WORDS:
+        session.data["visitor_phone"] = None
+    else:
+        number = zimbabwe_mobile(text)
+        if not number:
+            client.send_text(session.wa_id, "That doesn't look like a Zimbabwean mobile number. Try e.g. 0772 123 456, or type *skip*.")
+            return
+        session.data["visitor_phone"] = number
+    ask_transport(session, home)
+
+
+def ask_transport(session, home):
+    name = session.data["visitor_name"]
     session.state = BOOK_TRANSPORT
     session.save()
     transports = list(TransportType.objects.filter(status=True).order_by("id")[:10])
@@ -232,6 +257,8 @@ def ask_confirm(session, home):
         lines.append(f"Coming: {transport.name}")
     if data.get("vehicle"):
         lines.append(f"Car: {data['vehicle']}")
+    if data.get("visitor_phone"):
+        lines.append(f"Code sent by SMS to: {data['visitor_phone']}")
     client.send_buttons(
         session.wa_id,
         "Please confirm the booking:\n" + "\n".join(lines),
@@ -254,21 +281,26 @@ def handle_book_confirm(session, home, text, choice):
         return show_menu(session, home)
 
     code = new_visit_code()
-    Visit.objects.create(
+    visit = Visit.objects.create(
         stand_number=home.stand.stand_number,
         home=home.address,
         visit_code=code,
         resident_phone_number=local_phone(session.wa_id),
         visitor_name=data["visitor_name"],
         visitor_vehicle_reg_number=data.get("vehicle") or None,
+        visitor_phone_number=data.get("visitor_phone"),
         transport_type=transport,
         visit_status=status,
     )
+    host = home.resident.name if home.resident else ""
+    if send_code_to_visitor(visit, host_name=host):
+        delivery = f"I've sent the code to {data['visitor_name']} by SMS. You can also forward this message."
+    else:
+        delivery = f"Forward this message to {data['visitor_name']}."
     client.send_text(
         session.wa_id,
         f"Booked ✅\nGate code: *{code}*\n\n"
-        f"Forward this message to {data['visitor_name']}. They show the code and their ID at the gate. "
-        "I'll message you when they arrive.",
+        f"{delivery} They show the code and their ID at the gate. I'll message you when they arrive.",
     )
     show_menu(session, home, intro="Anything else?")
 
@@ -361,6 +393,7 @@ def handle_repair_description(session, home, text, choice):
 STATE_HANDLERS = {
     MENU: handle_menu,
     BOOK_NAME: handle_book_name,
+    BOOK_VISITOR_PHONE: handle_book_visitor_phone,
     BOOK_TRANSPORT: handle_book_transport,
     BOOK_VEHICLE: handle_book_vehicle,
     BOOK_CONFIRM: handle_book_confirm,

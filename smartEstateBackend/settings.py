@@ -62,6 +62,7 @@ INSTALLED_APPS = [
     "whitelist",
     "chatbot",
     "whatsapp",
+    "sms",
 ]
 
 MIDDLEWARE = [
@@ -176,6 +177,12 @@ if WHATSAPP_ENABLED and not DEBUG:
     missing = [name for name in ("WHATSAPP_TOKEN", "WHATSAPP_PHONE_NUMBER_ID", "WHATSAPP_VERIFY_TOKEN", "WHATSAPP_APP_SECRET") if not globals()[name]]
     if missing:
         raise ImproperlyConfigured(f"WhatsApp is enabled but these are not set: {', '.join(missing)}")
+
+# SMS (see sms/sender.py). "console" sends nothing.
+SMS_BACKEND = os.environ.get("SMS_BACKEND", "console")
+SMS_SENDER = os.environ.get("SMS_SENDER", "")
+TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID", "")
+TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN", "")
 
 # Production hardening (active whenever DEBUG is off).
 if not DEBUG:

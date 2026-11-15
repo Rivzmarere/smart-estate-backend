@@ -6,7 +6,7 @@ from .serializer import VisitBookOutSerializer, VisitBookinSerializer, VisitRead
 from rest_framework.generics import GenericAPIView
 from rest_framework.response import Response
 from rest_framework import status
-from whatsapp.notifications import notify_visitor_arrived
+from .messaging import notify_visitor_arrived, send_code_to_visitor
 from .utilities import random_numbers,search_auth,search_home
 from django.shortcuts import get_object_or_404
 from smartEstateBackend.permissions import IsAdminOrGuard, PublicCreateStaffRead
@@ -30,11 +30,13 @@ class VisitList(GenericAPIView):
                 if (is_visit_valid == True):
                     home_address =search_home(request.data["stand_number"])
                     visit_code = random_numbers()
-                    serializer.save(visit_code=visit_code,home=home_address["address"])
+                    visit = serializer.save(visit_code=visit_code,home=home_address["address"])
+                    sms_sent = send_code_to_visitor(visit)
                     return Response({
                         "data":{
                             "visit_code":visit_code,
-                            "Visitor_name":request.data["visitor_name"]
+                            "Visitor_name":request.data["visitor_name"],
+                            "sms_sent": sms_sent,
                             }
                         }, status=status.HTTP_201_CREATED)
                 else:

@@ -1,6 +1,8 @@
 from rest_framework import serializers
 
 from authentication.serializer import UserSummarySerializer
+from sms.sender import zimbabwe_mobile
+
 from .models import Visit
 
 class VisitReadSerializer(serializers.ModelSerializer):
@@ -14,7 +16,15 @@ class VisitReadSerializer(serializers.ModelSerializer):
 class VisitWriteSerializer(serializers.ModelSerializer):
     class Meta:
         model = Visit
-        fields = ['stand_number','resident_phone_number','visitor_name','transport_type','visit_status']
+        fields = ['stand_number','resident_phone_number','visitor_name','visitor_phone_number','transport_type','visit_status']
+
+    def validate_visitor_phone_number(self, value):
+        if value in (None, ""):
+            return None
+        number = zimbabwe_mobile(value)
+        if not number:
+            raise serializers.ValidationError("Enter a Zimbabwean mobile number, e.g. 0772 123 456.")
+        return number
         
 
 class VisitBookinSerializer(serializers.ModelSerializer):

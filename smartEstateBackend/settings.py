@@ -63,6 +63,7 @@ INSTALLED_APPS = [
     "chatbot",
     "whatsapp",
     "sms",
+    "notice",
 ]
 
 MIDDLEWARE = [

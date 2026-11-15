@@ -126,7 +126,7 @@ class WhatsAppBotTests(EstateFixture):
     def test_greeting_shows_menu_with_address(self):
         reply = self.text(RESIDENT_A, "Hi")
         self.assertIn("101 Msasa Close", self.body(reply))
-        self.assertEqual(self.choice_ids(reply), ["book", "visitors", "repair", "help"])
+        self.assertEqual(self.choice_ids(reply), ["book", "visitors", "repair", "notices", "help"])
 
     # -- booking ---------------------------------------------------------
     def test_book_visitor_by_car(self):
@@ -233,3 +233,12 @@ class WhatsAppBotTests(EstateFixture):
         self.client.put(f"/visit-book-in/{visit.id}", {"visitor_national_id": "63-222222D22", "visit_status": self.visit_status.id})
         self.assertEqual(client.OUTBOX[0]["type"], "template")
         self.assertEqual(client.OUTBOX[0]["template"]["name"], "visitor_arrived")
+
+    def test_estate_notices(self):
+        from notice.models import Notice
+        Notice.objects.create(title="Water cut Tuesday", body="ZINWA maintenance 8am-2pm.", category="water", created_by=self.admin)
+        Notice.objects.create(title="Old news", body="x", created_by=self.admin, published=False)
+        self.tap(RESIDENT_A, "notices")
+        text = self.body(client.OUTBOX[-2])
+        self.assertIn("Water cut Tuesday", text)
+        self.assertNotIn("Old news", text)

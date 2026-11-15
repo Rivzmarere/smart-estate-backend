@@ -12,6 +12,7 @@ from django.db.models import Q
 from django.utils import timezone
 
 from complaint.models import Complain
+from notice.models import Notice
 from home.models import Home
 from parameters.models.models_complaint_category import ComplaintCategory
 from parameters.models.models_complaint_status import ComplaintStatus
@@ -147,6 +148,7 @@ def show_menu(session, home, intro=None):
             ("book", "Book a visitor", "Get a gate code for someone visiting you"),
             ("visitors", "My visitors", "See or cancel upcoming visitors"),
             ("repair", "Report a repair", "Log a fault or complaint with the estate"),
+            ("notices", "Estate notices", "Latest news from the estate office"),
             ("help", "Help", "How this works"),
         ],
         section_title="Smart Estate",
@@ -160,6 +162,8 @@ def handle_menu(session, home, text, choice):
         return show_visitors(session, home)
     if choice == "repair":
         return start_repair(session, home)
+    if choice == "notices":
+        return show_notices(session, home)
     if choice == "help":
         client.send_text(
             session.wa_id,
@@ -173,6 +177,20 @@ def handle_menu(session, home, text, choice):
     if choice and choice.startswith("cancel_"):
         return cancel_visit(session, home, choice)
     return show_menu(session, home)
+
+
+def show_notices(session, home):
+    notices = list(Notice.objects.current()[:3])
+    if not notices:
+        return show_menu(session, home, intro="There are no estate notices right now. What would you like to do?")
+    parts = []
+    for notice in notices:
+        when = timezone.localtime(notice.publish_at).strftime("%d %b")
+        pin = "📌 " if notice.pinned else ""
+        body = notice.body if len(notice.body) <= 600 else notice.body[:597] + "…"
+        parts.append(f"{pin}*{notice.title}* ({notice.get_category_display()}, {when})\n{body}")
+    client.send_text(session.wa_id, "\n\n".join(parts))
+    show_menu(session, home, intro="Anything else?")
 
 
 # ---------------------------------------------------------------- book a visitor

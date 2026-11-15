@@ -30,4 +30,5 @@ urlpatterns = [
     path('', include('whitelist.url')),
     path('', include('parameters.url')),
     path('', include('whatsapp.url')),
+    path('', include('notice.url')),
 ]

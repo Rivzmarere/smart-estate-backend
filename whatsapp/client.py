@@ -124,16 +124,49 @@ def send_list(wa_id, text, button_label, rows, section_title="Options"):
     )
 
 
-def send_template(wa_id, name, parameters, language="en"):
-    """Approved template message; required to message someone outside the 24-hour window."""
+def send_template(wa_id, name, parameters, language="en", button_payloads=()):
+    """
+    Approved template message; required to message someone outside the 24-hour window.
+    button_payloads: one payload per quick-reply button in the template, in order.
+    """
+    components = [{"type": "body", "parameters": [{"type": "text", "text": str(p)} for p in parameters]}]
+    for index, payload in enumerate(button_payloads):
+        components.append(
+            {"type": "button", "sub_type": "quick_reply", "index": str(index), "parameters": [{"type": "payload", "payload": payload}]}
+        )
     return _send(
         wa_id,
-        {
-            "type": "template",
-            "template": {
-                "name": name,
-                "language": {"code": language},
-                "components": [{"type": "body", "parameters": [{"type": "text", "text": str(p)} for p in parameters]}],
-            },
-        },
+        {"type": "template", "template": {"name": name, "language": {"code": language}, "components": components}},
     )
+
+
+# Media a resident sends us (repair photos).
+MAX_MEDIA_BYTES = 5 * 1024 * 1024
+DRY_RUN_MEDIA = {}  # media_id -> (bytes, mime type), for tests
+
+
+def _get(url, timeout=15):
+    request = urllib.request.Request(url, headers={"Authorization": f"Bearer {settings.WHATSAPP_TOKEN}"})
+    return urllib.request.urlopen(request, timeout=timeout)
+
+
+def download_media(media_id):
+    """(bytes, mime type) for an inbound media ID, or (None, None). Never raises."""
+    if settings.WHATSAPP_DRY_RUN:
+        return DRY_RUN_MEDIA.get(media_id, (None, None))
+    try:
+        with _get(f"https://graph.facebook.com/{settings.WHATSAPP_API_VERSION}/{media_id}") as response:
+            info = json.loads(response.read() or b"{}")
+        url = info.get("url", "")
+        if not url.startswith("https://"):
+            return None, None
+        if int(info.get("file_size") or 0) > MAX_MEDIA_BYTES:
+            return None, None
+        with _get(url, timeout=30) as response:
+            data = response.read(MAX_MEDIA_BYTES + 1)
+        if len(data) > MAX_MEDIA_BYTES:
+            return None, None
+        return data, info.get("mime_type", "")
+    except (urllib.error.URLError, TimeoutError, ValueError) as exc:
+        logger.warning("Could not download WhatsApp media %s: %s", media_id, exc)
+        return None, None

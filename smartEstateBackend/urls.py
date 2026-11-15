@@ -32,4 +32,6 @@ urlpatterns = [
     path('', include('whatsapp.url')),
     path('', include('notice.url')),
     path('', include('reports.url')),
+    path('', include('levy.url')),
+    path('', include('gatepass.url')),
 ]

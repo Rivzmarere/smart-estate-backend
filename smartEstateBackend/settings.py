@@ -65,6 +65,8 @@ INSTALLED_APPS = [
     "sms",
     "notice",
     "reports",
+    "levy",
+    "gatepass",
 ]
 
 MIDDLEWARE = [
@@ -175,6 +177,9 @@ WHATSAPP_VERIFY_TOKEN = os.environ.get("WHATSAPP_VERIFY_TOKEN", "")
 WHATSAPP_APP_SECRET = os.environ.get("WHATSAPP_APP_SECRET", "")
 WHATSAPP_API_VERSION = os.environ.get("WHATSAPP_API_VERSION", "v23.0")
 WHATSAPP_TEMPLATE_VISITOR_ARRIVED = os.environ.get("WHATSAPP_TEMPLATE_VISITOR_ARRIVED", "")
+WHATSAPP_TEMPLATE_PAYMENT_RECEIPT = os.environ.get("WHATSAPP_TEMPLATE_PAYMENT_RECEIPT", "")
+WHATSAPP_TEMPLATE_WALK_IN = os.environ.get("WHATSAPP_TEMPLATE_WALK_IN", "")
+WHATSAPP_TEMPLATE_REPAIR_UPDATE = os.environ.get("WHATSAPP_TEMPLATE_REPAIR_UPDATE", "")
 if WHATSAPP_ENABLED and not DEBUG:
     missing = [name for name in ("WHATSAPP_TOKEN", "WHATSAPP_PHONE_NUMBER_ID", "WHATSAPP_VERIFY_TOKEN", "WHATSAPP_APP_SECRET") if not globals()[name]]
     if missing:
@@ -185,6 +190,24 @@ SMS_BACKEND = os.environ.get("SMS_BACKEND", "console")
 SMS_SENDER = os.environ.get("SMS_SENDER", "")
 TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID", "")
 TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN", "")
+
+# Where this API and the resident portal are reachable from the internet
+# (Paynow posts payment results to PUBLIC_API_URL).
+PUBLIC_API_URL = os.environ.get("PUBLIC_API_URL", "http://localhost:8000").rstrip("/")
+RESIDENT_PORTAL_URL = os.environ.get("RESIDENT_PORTAL_URL", "http://localhost:4201").rstrip("/")
+
+# Uploaded files (repair photos). Keep MEDIA_ROOT on a persistent volume.
+MEDIA_URL = "media/"
+MEDIA_ROOT = Path(os.environ.get("MEDIA_ROOT", BASE_DIR / "media"))
+
+# Paynow (EcoCash / OneMoney / InnBucks). One integration per currency.
+PAYNOW_DRY_RUN = env_bool("PAYNOW_DRY_RUN", DEBUG)
+PAYNOW_USD_INTEGRATION_ID = os.environ.get("PAYNOW_USD_INTEGRATION_ID", "")
+PAYNOW_USD_INTEGRATION_KEY = os.environ.get("PAYNOW_USD_INTEGRATION_KEY", "")
+PAYNOW_ZWG_INTEGRATION_ID = os.environ.get("PAYNOW_ZWG_INTEGRATION_ID", "")
+PAYNOW_ZWG_INTEGRATION_KEY = os.environ.get("PAYNOW_ZWG_INTEGRATION_KEY", "")
+# In Paynow test mode this must be the email the merchant account is registered with.
+PAYNOW_AUTH_EMAIL = os.environ.get("PAYNOW_AUTH_EMAIL", "")
 
 # Production hardening (active whenever DEBUG is off).
 if not DEBUG:

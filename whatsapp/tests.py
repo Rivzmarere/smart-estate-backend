@@ -34,7 +34,9 @@ _ids = itertools.count(1)
     WHATSAPP_VERIFY_TOKEN="verify-me",
     WHATSAPP_TEMPLATE_VISITOR_ARRIVED="",
 )
-class WhatsAppBotTests(EstateFixture):
+class BotCase(EstateFixture):
+    """Shared setup and helpers for bot conversations (no tests of its own)."""
+
     def setUp(self):
         super().setUp()
         client.OUTBOX.clear()
@@ -91,6 +93,8 @@ class WhatsAppBotTests(EstateFixture):
         self.tap(wa_id, "confirm_yes")
         return Visit.objects.latest("id")
 
+
+class WhatsAppBotTests(BotCase):
     # -- webhook ---------------------------------------------------------
     def test_meta_verification_handshake(self):
         ok = self.client.get("/whatsapp/webhook", {"hub.mode": "subscribe", "hub.verify_token": "verify-me", "hub.challenge": "12345"})
@@ -126,7 +130,7 @@ class WhatsAppBotTests(EstateFixture):
     def test_greeting_shows_menu_with_address(self):
         reply = self.text(RESIDENT_A, "Hi")
         self.assertIn("101 Msasa Close", self.body(reply))
-        self.assertEqual(self.choice_ids(reply), ["book", "visitors", "repair", "notices", "help"])
+        self.assertEqual(self.choice_ids(reply), ["book", "visitors", "levy", "repair", "repairs", "notices", "help"])
 
     # -- booking ---------------------------------------------------------
     def test_book_visitor_by_car(self):
@@ -186,7 +190,7 @@ class WhatsAppBotTests(EstateFixture):
         self.assertEqual(complaint.stand_number, 101)
         self.assertEqual(complaint.complaint_category, self.drainage)
         self.assertEqual(complaint.description, "Blocked drain outside the gate")
-        self.assertIn(complaint.complain_code, self.body(client.OUTBOX[-2]))
+        self.assertIn(complaint.complain_code, self.body(reply))
 
     # -- arrival notification -------------------------------------------
     def test_resident_told_when_guard_books_visitor_in(self):

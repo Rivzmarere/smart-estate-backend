@@ -5,6 +5,7 @@ from .models import Complain
 
 class ComplainReadSerializer(serializers.ModelSerializer):
     assigned_to = UserSummarySerializer(read_only=True)
+    photo_count = serializers.IntegerField(source="photos.count", read_only=True)
 
     class Meta:
         model = Complain

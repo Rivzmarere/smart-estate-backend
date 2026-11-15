@@ -1,17 +1,29 @@
 """
 Smart Estate WhatsApp bot: menu-driven conversations for residents.
 
-v1 (pilot): book a visitor, see / cancel my visitors, report a repair.
+Book a visitor, see / cancel my visitors, report a repair (with photos),
+see my repairs, pay the levy by EcoCash / OneMoney, read notices, and answer
+walk-in requests from the gate.
 The bot identifies the resident by their WhatsApp number, which Meta has
 already verified, and only serves numbers registered on a home.
 """
 
+import mimetypes
+import re
 from datetime import timedelta
+from decimal import Decimal, InvalidOperation
 
+from django.core.files.base import ContentFile
 from django.db.models import Q
 from django.utils import timezone
 
-from complaint.models import Complain
+from complaint.models import Complain, ComplaintPhoto
+from gatepass import services as walk_ins
+from gatepass.models import WalkInRequest
+from levy import paynow
+from levy.accounts import account, fmt_usd, fmt_zig, in_zig
+from levy.models import Payment
+from levy.services import pending_payment, start_payment
 from notice.models import Notice
 from home.models import Home
 from parameters.models.models_complaint_category import ComplaintCategory
@@ -35,6 +47,11 @@ BOOK_VEHICLE = "book_vehicle"
 BOOK_CONFIRM = "book_confirm"
 REPAIR_CATEGORY = "repair_category"
 REPAIR_DESCRIPTION = "repair_description"
+REPAIR_PHOTO = "repair_photo"
+LEVY_CHOICE = "levy_choice"
+LEVY_AMOUNT = "levy_amount"
+LEVY_CURRENCY = "levy_currency"
+LEVY_PHONE = "levy_phone"
 
 # A half-finished conversation older than this starts again from the menu.
 SESSION_TIMEOUT = timedelta(minutes=30)
@@ -44,6 +61,10 @@ SKIP_WORDS = {"skip", "no", "none", "-"}
 
 MAX_NAME_LENGTH = 60
 MAX_DESCRIPTION_LENGTH = 1000
+MAX_PHOTOS = 3
+PHOTO_TYPES = {"image/jpeg", "image/png", "image/webp"}
+MIN_PAYMENT = Decimal("1.00")
+MAX_PAYMENT = Decimal("10000.00")
 
 
 # ---------------------------------------------------------------- lookups
@@ -119,11 +140,19 @@ def handle_message(wa_id, message):
         choice = reply.get("id")
     elif kind == "button":  # quick-reply button on a template
         choice = message.get("button", {}).get("payload")
+    elif kind == "image":
+        session.save()
+        return handle_image(session, home, message.get("image", {}))
     else:
         client.send_text(wa_id, "Sorry, I can only read text and menu choices for now.")
         session.save()
         show_menu(session, home)
         return
+
+    # Walk-in answers can arrive at any point in a conversation.
+    if choice and choice.startswith((walk_ins.APPROVE_PREFIX, walk_ins.DECLINE_PREFIX)):
+        session.save()
+        return answer_walk_in(session, home, choice)
 
     if text.lower() in RESET_WORDS:
         show_menu(session, home)
@@ -147,7 +176,9 @@ def show_menu(session, home, intro=None):
         [
             ("book", "Book a visitor", "Get a gate code for someone visiting you"),
             ("visitors", "My visitors", "See or cancel upcoming visitors"),
+            ("levy", "Pay levy", "See your balance and pay with EcoCash or OneMoney"),
             ("repair", "Report a repair", "Log a fault or complaint with the estate"),
+            ("repairs", "My repairs", "Progress on repairs you reported"),
             ("notices", "Estate notices", "Latest news from the estate office"),
             ("help", "Help", "How this works"),
         ],
@@ -162,6 +193,10 @@ def handle_menu(session, home, text, choice):
         return show_visitors(session, home)
     if choice == "repair":
         return start_repair(session, home)
+    if choice == "repairs":
+        return show_repairs(session, home)
+    if choice == "levy":
+        return show_levy(session, home)
     if choice == "notices":
         return show_notices(session, home)
     if choice == "help":
@@ -170,7 +205,8 @@ def handle_menu(session, home, text, choice):
             "Smart Estate on WhatsApp:\n"
             "• Book a visitor: you get a code; forward it to your visitor to show at the gate.\n"
             "• My visitors: see who is expected and cancel a booking.\n"
-            "• Report a repair: the estate office is notified.\n"
+            "• Pay levy: see what you owe and pay from your EcoCash or OneMoney wallet; the receipt comes here.\n"
+            "• Report a repair: the estate office is notified, and you can send photos. I'll tell you when the status changes.\n"
             "Type *menu* at any time to start again.",
         )
         return show_menu(session, home, intro="Anything else?")
@@ -395,7 +431,7 @@ def handle_repair_description(session, home, text, choice):
         client.send_text(session.wa_id, "Sorry, repairs are not set up yet. Please contact the estate office.")
         return show_menu(session, home)
     code = random_numbers()
-    Complain.objects.create(
+    complaint = Complain.objects.create(
         stand_number=home.stand.stand_number,
         home=home.address,
         complain_code=code,
@@ -404,8 +440,221 @@ def handle_repair_description(session, home, text, choice):
         complaint_category=category,
         compalint_status=status,
     )
-    client.send_text(session.wa_id, f"Thank you. Your report is logged with reference *{code}*. The estate office will follow up.")
+    session.state, session.data = REPAIR_PHOTO, {"complaint_id": complaint.id}
+    session.save()
+    client.send_buttons(
+        session.wa_id,
+        f"Thank you. Your report is logged with reference *{code}*. The estate office will follow up, "
+        "and I'll message you when its status changes.\n\nIf you can, send a photo of the problem now. It helps the team.",
+        [("repair_done", "Done")],
+    )
+
+
+def handle_repair_photo(session, home, text, choice):
+    """Waiting for photos; anything other than an image finishes the report."""
+    show_menu(session, home, intro="Thanks. Anything else?")
+
+
+def handle_image(session, home, image):
+    if session.state != REPAIR_PHOTO:
+        client.send_text(session.wa_id, "Thanks, but I can only take photos as part of a repair report. Tap *Report a repair* first.")
+        return show_menu(session, home)
+    complaint = Complain.objects.filter(id=session.data.get("complaint_id"), stand_number=home.stand.stand_number).first()
+    if complaint is None:
+        return show_menu(session, home)
+    if complaint.photos.count() >= MAX_PHOTOS:
+        client.send_buttons(session.wa_id, f"I already have {MAX_PHOTOS} photos for this report, which is enough. Thank you!", [("repair_done", "Done")])
+        return
+    data, mime = client.download_media(image.get("id", ""))
+    mime = (mime or image.get("mime_type") or "").split(";")[0].strip().lower()
+    if not data or mime not in PHOTO_TYPES:
+        client.send_buttons(session.wa_id, "Sorry, I couldn't save that photo. Please send it as a normal photo (JPEG or PNG, under 5 MB).", [("repair_done", "Done")])
+        return
+    extension = mimetypes.guess_extension(mime) or ".jpg"
+    photo = ComplaintPhoto(complaint=complaint, content_type=mime, source_media_id=image.get("id", "")[:128])
+    photo.image.save(f"{complaint.complain_code}-{complaint.photos.count() + 1}{extension}", ContentFile(data), save=True)
+    count = complaint.photos.count()
+    more = " Send another, or tap Done." if count < MAX_PHOTOS else ""
+    client.send_buttons(session.wa_id, f"Photo added to report {complaint.complain_code} ({count} of {MAX_PHOTOS}).{more}", [("repair_done", "Done")])
+
+
+def show_repairs(session, home):
+    complaints = list(
+        Complain.objects.filter(stand_number=home.stand.stand_number, status=True)
+        .select_related("compalint_status", "complaint_category").order_by("-date_created")[:5]
+    )
+    if not complaints:
+        return show_menu(session, home, intro="You have no repair reports. What would you like to do?")
+    lines = ["Your latest repair reports:"]
+    for c in complaints:
+        when = timezone.localtime(c.date_created).strftime("%d %b")
+        lines.append(f"• *{c.complain_code}* {c.complaint_category.name}: {c.compalint_status.name} (logged {when})")
+    client.send_text(session.wa_id, "\n".join(lines))
     show_menu(session, home, intro="Anything else?")
+
+
+# ---------------------------------------------------------------- walk-in approval
+
+def answer_walk_in(session, home, choice):
+    approve = choice.startswith(walk_ins.APPROVE_PREFIX)
+    raw_id = choice.removeprefix(walk_ins.APPROVE_PREFIX if approve else walk_ins.DECLINE_PREFIX)
+    request = WalkInRequest.objects.filter(id=raw_id if raw_id.isdigit() else 0, home=home).first()
+    if request is None:
+        client.send_text(session.wa_id, "I couldn't find that gate request.")
+        return
+    request, changed = walk_ins.answer(request.id, approve, WalkInRequest.WHATSAPP)
+    if not changed:
+        already = {
+            WalkInRequest.APPROVED: "was already approved",
+            WalkInRequest.DECLINED: "was already declined",
+            WalkInRequest.EXPIRED: "has expired. If they are still at the gate, the guard can ask again",
+        }.get(request.status, "can no longer be changed")
+        client.send_text(session.wa_id, f"The request for {request.visitor_name} {already}.")
+        return
+    if approve:
+        client.send_text(session.wa_id, f"✅ Approved. The guard will let {request.visitor_name} in (code {request.visit.visit_code}). I'll tell you when they are inside.")
+    else:
+        client.send_text(session.wa_id, f"❌ Declined. The guard will not let {request.visitor_name} in.")
+
+
+# ---------------------------------------------------------------- levy
+
+def show_levy(session, home):
+    acc = account(home)
+    balance = acc["balance"]
+    if balance <= 0:
+        extra = f" You have {fmt_usd(-balance)} credit." if balance < 0 else ""
+        return show_menu(session, home, intro=f"Your levy account for {home.address} is up to date ✅.{extra} What would you like to do?")
+    lines = [f"Levy account for {home.address}", f"Balance: *{fmt_usd(balance)}*"]
+    if acc["arrears"] > 0:
+        lines.append(f"Overdue: {fmt_usd(acc['arrears'])}")
+    currencies = paynow.available_currencies()
+    if Payment.ZWG in currencies:
+        zig, rate = in_zig(balance)
+        if zig is not None:
+            lines.append(f"In ZiG: {fmt_zig(zig)} at {rate:,.2f} per USD")
+    waiting = pending_payment(home)
+    if waiting:
+        lines.append(f"\nA payment request for {fmt_usd(waiting.amount_usd)} is waiting on {waiting.phone}. Approve it on that phone, or try again in a few minutes.")
+        client.send_text(session.wa_id, "\n".join(lines))
+        return show_menu(session, home, intro="Anything else?")
+    if not currencies:
+        lines.append("\nTo pay, please contact the estate office.")
+        client.send_text(session.wa_id, "\n".join(lines))
+        return show_menu(session, home, intro="Anything else?")
+    session.state, session.data = LEVY_CHOICE, {}
+    session.save()
+    client.send_buttons(
+        session.wa_id,
+        "\n".join(lines) + "\n\nHow much would you like to pay?",
+        [("levy_all", f"Pay {fmt_usd(balance)}"), ("levy_other", "Another amount"), ("levy_back", "Not now")],
+    )
+
+
+def handle_levy_choice(session, home, text, choice):
+    if choice == "levy_all":
+        return levy_amount_chosen(session, home, account(home)["balance"])
+    if choice == "levy_other":
+        session.state = LEVY_AMOUNT
+        session.save()
+        client.send_text(session.wa_id, "How much would you like to pay, in US dollars? (e.g. 50)")
+        return
+    if choice == "levy_back":
+        return show_menu(session, home)
+    if text:
+        return handle_levy_amount(session, home, text, choice)
+    client.send_text(session.wa_id, "Please tap one of the buttons above.")
+
+
+def parse_amount(text):
+    cleaned = re.sub(r"(?i)usd|us\$|\$|dollars?", "", text).replace(",", "").strip()
+    try:
+        return Decimal(cleaned).quantize(Decimal("0.01"))
+    except (InvalidOperation, ValueError):
+        return None
+
+
+def handle_levy_amount(session, home, text, choice):
+    amount = parse_amount(text)
+    if amount is None or not (MIN_PAYMENT <= amount <= MAX_PAYMENT):
+        client.send_text(session.wa_id, f"Please type an amount in US dollars between {MIN_PAYMENT:.0f} and {MAX_PAYMENT:,.0f}, e.g. 50.")
+        return
+    levy_amount_chosen(session, home, amount)
+
+
+def levy_amount_chosen(session, home, amount):
+    session.data["amount_usd"] = str(amount)
+    currencies = paynow.available_currencies()
+    zig, _ = in_zig(amount) if Payment.ZWG in currencies else (None, None)
+    if Payment.USD in currencies and zig is not None:
+        session.state = LEVY_CURRENCY
+        session.save()
+        client.send_buttons(
+            session.wa_id,
+            "Which wallet are you paying from?",
+            [("cur_USD", fmt_usd(amount)), ("cur_ZWG", fmt_zig(zig))],
+        )
+        return
+    session.data["currency"] = Payment.USD if Payment.USD in currencies else Payment.ZWG
+    ask_payer_phone(session, home)
+
+
+def handle_levy_currency(session, home, text, choice):
+    if choice not in ("cur_USD", "cur_ZWG"):
+        client.send_text(session.wa_id, "Please tap USD or ZiG.")
+        return
+    session.data["currency"] = choice[4:]
+    ask_payer_phone(session, home)
+
+
+def ask_payer_phone(session, home):
+    session.state = LEVY_PHONE
+    session.save()
+    own = local_phone(session.wa_id)
+    if paynow.method_for_phone(own):
+        client.send_buttons(
+            session.wa_id,
+            "Which number should get the payment prompt?",
+            [("payphone_self", f"Use {own}"), ("payphone_other", "Another number")],
+        )
+    else:
+        client.send_text(session.wa_id, "Type the EcoCash or OneMoney number to send the payment prompt to.")
+
+
+def handle_levy_phone(session, home, text, choice):
+    if choice == "payphone_other":
+        client.send_text(session.wa_id, "Type the EcoCash or OneMoney number, e.g. 0772 123 456.")
+        return
+    if choice == "payphone_self":
+        phone = local_phone(session.wa_id)
+    else:
+        number = zimbabwe_mobile(text)
+        phone = local_phone(number) if number else None
+        if not phone or not paynow.method_for_phone(phone):
+            client.send_text(session.wa_id, "That isn't an EcoCash (077/078) or OneMoney (071) number. Please try again, or type *menu*.")
+            return
+    if not paynow.method_for_phone(phone):
+        client.send_text(session.wa_id, "That number can't pay through EcoCash or OneMoney. Type another number.")
+        return
+
+    amount = Decimal(session.data["amount_usd"])
+    currency = session.data.get("currency", Payment.USD)
+    try:
+        payment, instructions = start_payment(home, amount, currency, phone, wa_id=session.wa_id)
+    except paynow.PaynowError as exc:
+        client.send_text(session.wa_id, f"Sorry, I couldn't start the payment: {exc} Please try again later.")
+        return show_menu(session, home, intro="Anything else?")
+    wallet = payment.get_method_display()
+    shown = fmt_zig(payment.amount) if currency == Payment.ZWG else fmt_usd(payment.amount)
+    message = (
+        f"📲 I've sent a payment request for *{shown}* to {phone}.\n"
+        f"Enter your {wallet} PIN on that phone to approve it. Your receipt will come here."
+    )
+    if instructions:
+        message += f"\n\nNo prompt? {instructions}"
+    session.state, session.data = MENU, {}
+    session.save()
+    client.send_text(session.wa_id, message)
 
 
 STATE_HANDLERS = {
@@ -417,4 +666,9 @@ STATE_HANDLERS = {
     BOOK_CONFIRM: handle_book_confirm,
     REPAIR_CATEGORY: handle_repair_category,
     REPAIR_DESCRIPTION: handle_repair_description,
+    REPAIR_PHOTO: handle_repair_photo,
+    LEVY_CHOICE: handle_levy_choice,
+    LEVY_AMOUNT: handle_levy_amount,
+    LEVY_CURRENCY: handle_levy_currency,
+    LEVY_PHONE: handle_levy_phone,
 }

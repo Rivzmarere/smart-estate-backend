@@ -62,3 +62,55 @@ Connect to Meta (test number works before business verification, for up to 5 rec
    (body: `{{1}} arrived at the gate at {{2}} (code {{3}})`) and set `WHATSAPP_TEMPLATE_VISITOR_ARRIVED` to its name.
 
 The webhook needs a public HTTPS address. For local testing use a tunnel such as `cloudflared tunnel --url http://localhost:8000`.
+
+## Levies and payments
+
+Levies are billed in US dollars, one invoice per home per month
+(`POST /levies/invoices/generate`). Payments can be USD or ZiG; a ZiG payment
+is converted at the rate recorded with it (`/levies/rates`), so balances are
+always in USD. Money received pays off the oldest invoice first, and
+"arrears" is what is still owed on invoices past their due date.
+
+Residents pay from WhatsApp (*Pay levy*) with EcoCash or OneMoney through
+Paynow. To switch this on:
+
+1. In Paynow, create one integration per currency (USD, and ZiG if wanted)
+   and set `PAYNOW_USD_INTEGRATION_ID` / `_KEY` (and `PAYNOW_ZWG_...`).
+2. Set `PUBLIC_API_URL` to this API's public https address. Paynow posts
+   results to `PUBLIC_API_URL/paynow/result/<payment id>`.
+3. Set `PAYNOW_AUTH_EMAIL` (in Paynow test mode it must be the merchant's
+   login email) and `PAYNOW_DRY_RUN=False`.
+4. Run `python manage.py paynow_poll` every few minutes (the
+   `paynow-poller` service in docker-compose does this), in case a result
+   POST never arrives.
+
+Paynow test mode numbers: 0771111111 succeeds, 0772222222 succeeds after a
+delay, 0773333333 is cancelled by the user, 0774444444 has insufficient
+balance.
+
+## Gate walk-ins
+
+When a visitor arrives without a code, the guard sends a walk-in request
+from the gate screen. The resident gets WhatsApp buttons (Approve / Decline);
+approving creates a visit the guard books in as usual. Without WhatsApp the
+gate shows the resident's number, and the guard records the answer from
+the call. Requests expire after 10 minutes.
+
+## Repairs
+
+Residents can send up to three photos with a repair report. Photos are kept
+in `MEDIA_ROOT` (put it on a persistent volume) and only staff can open
+them. When the estate changes a repair's status, the resident is told on
+WhatsApp, or by SMS if WhatsApp is not possible.
+
+## WhatsApp templates to submit to Meta
+
+Messages to someone who has not written in the last 24 hours need approved
+templates. Submit these (category "Utility") and put their names in `.env`:
+
+| Setting | Body | Buttons |
+| --- | --- | --- |
+| `WHATSAPP_TEMPLATE_VISITOR_ARRIVED` | {{1}} arrived at the gate at {{2}} (code {{3}}). | none |
+| `WHATSAPP_TEMPLATE_WALK_IN` | {{1}} is at the gate asking to visit you. Let them in? | Quick reply: Approve, Decline |
+| `WHATSAPP_TEMPLATE_PAYMENT_RECEIPT` | Smart Estate receipt {{1}}: {{2}} received for {{3}}. Balance now {{4}}. | none |
+| `WHATSAPP_TEMPLATE_REPAIR_UPDATE` | Your repair {{1}} ({{2}}) is now: {{3}}. | none |

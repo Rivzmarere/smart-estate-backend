@@ -22,3 +22,19 @@ class Complain(models.Model):
     status = models.BooleanField(default=True)
 
 
+
+def photo_path(photo, filename):
+    return f"complaints/{photo.complaint_id}/{filename}"
+
+
+class ComplaintPhoto(models.Model):
+    """A photo the resident sent with a repair report (served only to staff)."""
+
+    complaint = models.ForeignKey(Complain, on_delete=models.CASCADE, related_name="photos")
+    image = models.FileField(upload_to=photo_path)
+    content_type = models.CharField(max_length=40)
+    source_media_id = models.CharField(max_length=128, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at"]

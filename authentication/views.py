@@ -83,6 +83,8 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
         token = super().get_token(user)
         token['role'] = user.role
         token['email'] = user.email
+        token['username'] = user.username
+        token['name'] = user.get_full_name() or user.username
         return token
 
     def validate(self, attrs):

@@ -138,6 +138,8 @@ class IsolationTests(TwoEstates):
 
     def test_public_estate_info(self):
         self.assertEqual(self.client.get("/estate/public?estate=borrowdale").json()["name"], "Borrowdale Brooke")
+        with self.settings(WHATSAPP_ENABLED=True, WHATSAPP_PUBLIC_NUMBER="+263 77 123 4567"):
+            self.assertEqual(self.client.get("/estate/public?estate=borrowdale").json()["whatsapp_number"], "263771234567")
         self.assertEqual(self.client.get("/estate/public?estate=nope").status_code, 404)
 
     def test_token_names_the_estate(self):

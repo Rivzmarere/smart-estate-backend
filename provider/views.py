@@ -16,7 +16,9 @@ class ProviderList(GenericAPIView):
     def read_serializer(self):
         return ProviderReadSerializer if is_staff_member(self.request.user) else ProviderPublicSerializer
     def get(self, request, format=None):
-            providers = Provider.objects.all()
+            providers = Provider.objects.select_related("provider_category").order_by("name", "surname")
+            if not is_staff_member(request.user):
+                providers = providers.filter(status=True)  # residents only see providers in use
             serializer = self.read_serializer()(providers, many=True)
             return Response(serializer.data, status=status.HTTP_200_OK)
 

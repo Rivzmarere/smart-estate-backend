@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.shortcuts import get_object_or_404
 from rest_framework import generics
 from rest_framework.permissions import AllowAny, BasePermission
@@ -91,4 +92,9 @@ class PublicEstate(APIView):
         estate = current_estate()
         if estate is None or estate is ALL:
             return Response({"detail": "Unknown estate."}, status=404)
-        return Response({"name": estate.name, "slug": estate.slug, "office_phone": estate.office_phone, "office_hours": estate.office_hours})
+        whatsapp = settings.WHATSAPP_PUBLIC_NUMBER if settings.WHATSAPP_ENABLED else ""
+        return Response({
+            "name": estate.name, "slug": estate.slug, "address": estate.address,
+            "office_phone": estate.office_phone, "office_hours": estate.office_hours,
+            "whatsapp_number": "".join(ch for ch in whatsapp if ch.isdigit()),
+        })

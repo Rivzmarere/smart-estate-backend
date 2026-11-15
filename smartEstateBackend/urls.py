@@ -31,4 +31,5 @@ urlpatterns = [
     path('', include('parameters.url')),
     path('', include('whatsapp.url')),
     path('', include('notice.url')),
+    path('', include('reports.url')),
 ]

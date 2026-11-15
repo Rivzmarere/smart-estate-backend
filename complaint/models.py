@@ -1,3 +1,4 @@
+from estates.models import EstateScoped
 from django.db import models
 
 from authentication.models import User
@@ -8,7 +9,7 @@ from stand.models import Stand
 
 # Create your models here.
 
-class Complain(models.Model):
+class Complain(EstateScoped):
     stand_number = models.IntegerField()
     home = models.CharField(max_length=200)
     complain_code = models.CharField(max_length=60)
@@ -27,7 +28,7 @@ def photo_path(photo, filename):
     return f"complaints/{photo.complaint_id}/{filename}"
 
 
-class ComplaintPhoto(models.Model):
+class ComplaintPhoto(EstateScoped):
     """A photo the resident sent with a repair report (served only to staff)."""
 
     complaint = models.ForeignKey(Complain, on_delete=models.CASCADE, related_name="photos")

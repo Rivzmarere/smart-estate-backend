@@ -23,6 +23,13 @@ class ComplainAssignUpdateSerializer(serializers.ModelSerializer):
         model = Complain
         fields = ["assigned_to","compalint_status"]
 
+    def validate_assigned_to(self, user):
+        from authentication.views import estate_users
+
+        if user and not estate_users().filter(pk=user.pk).exists():
+            raise serializers.ValidationError("That person does not work for this estate.")
+        return user
+
 
 class ComplainUpdateStatusSerializer(serializers.ModelSerializer):
     class Meta:

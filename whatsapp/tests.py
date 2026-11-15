@@ -91,7 +91,7 @@ class BotCase(EstateFixture):
             reply = self.text(wa_id, reg)
         self.assertIn("confirm_yes", self.choice_ids(reply))
         self.tap(wa_id, "confirm_yes")
-        return Visit.objects.latest("id")
+        return Visit.all_estates.latest("id")
 
 
 class WhatsAppBotTests(BotCase):

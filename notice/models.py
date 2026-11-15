@@ -1,3 +1,4 @@
+from estates.models import EstateScoped, EstateScopedManager
 from django.db import models
 from django.db.models import Q
 from django.utils import timezone
@@ -16,7 +17,7 @@ class NoticeQuerySet(models.QuerySet):
         )
 
 
-class Notice(models.Model):
+class Notice(EstateScoped):
     CATEGORIES = [
         ("general", "General"),
         ("water", "Water"),
@@ -37,7 +38,7 @@ class Notice(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
-    objects = NoticeQuerySet.as_manager()
+    objects = EstateScopedManager.from_queryset(NoticeQuerySet)()
 
     class Meta:
         ordering = ["-pinned", "-publish_at"]

@@ -6,6 +6,8 @@ ZiG is converted at the exchange rate recorded with it, so the account
 balance is always in USD.
 """
 
+from estates.models import EstateScoped
+
 from decimal import ROUND_HALF_UP, Decimal
 
 from django.db import models
@@ -21,10 +23,10 @@ def money(value):
     return Decimal(value).quantize(CENTS, rounding=ROUND_HALF_UP)
 
 
-class ExchangeRate(models.Model):
+class ExchangeRate(EstateScoped):
     """ZiG per US dollar from a given day (the estate's chosen rate, e.g. the RBZ interbank rate)."""
 
-    effective_from = models.DateField(unique=True)
+    effective_from = models.DateField()
     zig_per_usd = models.DecimalField(max_digits=12, decimal_places=4)
     note = models.CharField(max_length=120, blank=True)
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
@@ -32,6 +34,7 @@ class ExchangeRate(models.Model):
 
     class Meta:
         ordering = ["-effective_from"]
+        constraints = [models.UniqueConstraint(fields=["estate", "effective_from"], name="one_rate_per_estate_per_day")]
 
     @classmethod
     def on(cls, day=None):
@@ -43,7 +46,7 @@ class ExchangeRate(models.Model):
         return f"ZiG {self.zig_per_usd} per USD from {self.effective_from}"
 
 
-class Invoice(models.Model):
+class Invoice(EstateScoped):
     LEVY = "levy"
     SPECIAL = "special"
     PENALTY = "penalty"
@@ -85,7 +88,7 @@ class Invoice(models.Model):
         return f"{self.number} {self.address} USD {self.amount_usd}"
 
 
-class Payment(models.Model):
+class Payment(EstateScoped):
     USD = "USD"
     ZWG = "ZWG"
     CURRENCIES = [(USD, "US dollar"), (ZWG, "ZiG")]

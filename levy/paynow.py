@@ -46,17 +46,30 @@ class PaynowError(Exception):
     pass
 
 
-def integration(currency):
-    """(id, key) for a currency, or (None, None) if it is not configured."""
+def integration(currency, estate=None):
+    """
+    (id, key) for a currency, or (None, None) if it is not configured.
+    Each estate can have its own Paynow account (money goes to that estate);
+    otherwise the server-wide settings are used.
+    """
     if currency == Payment.ZWG:
-        pair = settings.PAYNOW_ZWG_INTEGRATION_ID, settings.PAYNOW_ZWG_INTEGRATION_KEY
+        own = (estate.paynow_zwg_integration_id, estate.paynow_zwg_integration_key) if estate else ("", "")
+        server = settings.PAYNOW_ZWG_INTEGRATION_ID, settings.PAYNOW_ZWG_INTEGRATION_KEY
     else:
-        pair = settings.PAYNOW_USD_INTEGRATION_ID, settings.PAYNOW_USD_INTEGRATION_KEY
-    return pair if all(pair) else (None, None)
+        own = (estate.paynow_usd_integration_id, estate.paynow_usd_integration_key) if estate else ("", "")
+        server = settings.PAYNOW_USD_INTEGRATION_ID, settings.PAYNOW_USD_INTEGRATION_KEY
+    for pair in (own, server):
+        if all(pair):
+            return pair
+    return None, None
 
 
-def available_currencies():
-    return [c for c in (Payment.USD, Payment.ZWG) if integration(c)[0]]
+def auth_email(estate=None):
+    return (estate.paynow_auth_email if estate else "") or settings.PAYNOW_AUTH_EMAIL
+
+
+def available_currencies(estate=None):
+    return [c for c in (Payment.USD, Payment.ZWG) if integration(c, estate)[0]]
 
 
 def method_for_phone(local_number):
@@ -97,7 +110,7 @@ def start_mobile_payment(payment, description):
     Saves poll_url / paynow_status on the payment; returns Paynow's instructions text.
     Raises PaynowError if Paynow refuses.
     """
-    integration_id, key = integration(payment.currency)
+    integration_id, key = integration(payment.currency, payment.estate)
     if not integration_id:
         raise PaynowError(f"Paynow is not set up for {payment.currency}.")
     pairs = [
@@ -107,7 +120,7 @@ def start_mobile_payment(payment, description):
         ("additionalinfo", description[:100]),
         ("returnurl", settings.RESIDENT_PORTAL_URL),
         ("resulturl", f"{settings.PUBLIC_API_URL}/paynow/result/{payment.pk}"),
-        ("authemail", settings.PAYNOW_AUTH_EMAIL),
+        ("authemail", auth_email(payment.estate)),
         ("phone", payment.phone),
         ("method", payment.method),
         ("status", "Message"),
@@ -139,7 +152,7 @@ def apply_status(payment, pairs):
     Apply a signed status message (from the result URL or a poll) to the payment.
     Returns "paid" the first time the payment is confirmed, otherwise the payment's status.
     """
-    _, key = integration(payment.currency)
+    _, key = integration(payment.currency, payment.estate)
     if not key or not verify(pairs, key):
         raise PaynowError("Bad Paynow signature")
     fields = {name.lower(): value for name, value in pairs}

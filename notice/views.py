@@ -33,5 +33,7 @@ class ManageNotices(generics.ListCreateAPIView):
 class ManageNotice(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [IsAdminRole]
     serializer_class = NoticeAdminSerializer
-    queryset = Notice.objects.all()
     lookup_url_kwarg = "id"
+
+    def get_queryset(self):
+        return Notice.objects.all()

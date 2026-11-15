@@ -1,3 +1,4 @@
+from estates.models import EstateScoped
 from django.db import models
 
 from authentication.models import User
@@ -7,7 +8,7 @@ from stand.models import Stand
 
 # Create your models here.
 
-class Provider(models.Model):
+class Provider(EstateScoped):
     name = models.CharField(max_length=60)
     surname = models.CharField(max_length=60)
     address = models.CharField(max_length=200)

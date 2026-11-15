@@ -18,6 +18,7 @@ from django.db.models import Q
 from django.utils import timezone
 
 from complaint.models import Complain, ComplaintPhoto
+from estates.context import use_estate
 from gatepass import services as walk_ins
 from gatepass.models import WalkInRequest
 from levy import paynow
@@ -71,14 +72,18 @@ MAX_PAYMENT = Decimal("10000.00")
 
 def find_homes(wa_id):
     """Active homes whose resident owns this WhatsApp number (a person may have more than one)."""
+    # WhatsApp has one number for every estate, so look across all of them.
     variants = phone_variants(wa_id)
     if not variants:
-        return Home.objects.none()
+        return Home.all_estates.none()
     phone_match = Q()
     for field in ("phone_number1", "phone_number2", "phone_number3", "phone_number4"):
         phone_match |= Q(**{f"{field}__in": variants})
-    residents = Resident.objects.filter(phone_match, status=True)
-    return Home.objects.filter(resident__in=residents, status=True).select_related("resident", "stand").order_by("id")
+    residents = Resident.all_estates.filter(phone_match, status=True)
+    return (
+        Home.all_estates.filter(resident__in=residents, status=True, estate__active=True)
+        .select_related("resident", "stand", "estate").order_by("id")
+    )
 
 
 def find_home(wa_id):
@@ -112,14 +117,21 @@ def new_visit_code():
 # ---------------------------------------------------------------- entry point
 
 def handle_message(wa_id, message):
-    """Process one inbound WhatsApp message object from the webhook."""
+    """Process one inbound WhatsApp message object from the webhook, inside the resident's estate."""
+    home = find_home(wa_id)
+    if home is None:
+        return _handle_message(wa_id, message, None)
+    with use_estate(home.estate):
+        return _handle_message(wa_id, message, home)
+
+
+def _handle_message(wa_id, message, home):
     session, _ = WhatsAppSession.objects.get_or_create(wa_id=wa_id)
     now = timezone.now()
     if session.state != MENU and session.updated_at and now - session.updated_at > SESSION_TIMEOUT:
         session.state, session.data = MENU, {}
     session.last_inbound_at = now
 
-    home = find_home(wa_id)
     if home is None:
         session.state, session.data = MENU, {}
         session.save()
@@ -168,7 +180,7 @@ def show_menu(session, home, intro=None):
     session.state, session.data = MENU, {}
     session.save()
     name = home.resident.name if home.resident else "there"
-    body = intro or f"Hi {name}, welcome to Smart Estate ({home.address}). What would you like to do?"
+    body = intro or f"Hi {name}, welcome to {home.estate.name} ({home.address}). What would you like to do?"
     client.send_list(
         session.wa_id,
         body,
@@ -498,11 +510,12 @@ def show_repairs(session, home):
 def answer_walk_in(session, home, choice):
     approve = choice.startswith(walk_ins.APPROVE_PREFIX)
     raw_id = choice.removeprefix(walk_ins.APPROVE_PREFIX if approve else walk_ins.DECLINE_PREFIX)
-    request = WalkInRequest.objects.filter(id=raw_id if raw_id.isdigit() else 0, home__in=find_homes(session.wa_id)).first()
+    request = WalkInRequest.all_estates.filter(id=raw_id if raw_id.isdigit() else 0, home__in=find_homes(session.wa_id)).first()
     if request is None:
         client.send_text(session.wa_id, "I couldn't find that gate request.")
         return
-    request, changed = walk_ins.answer(request.id, approve, WalkInRequest.WHATSAPP)
+    with use_estate(request.estate):
+        request, changed = walk_ins.answer(request.id, approve, WalkInRequest.WHATSAPP)
     if not changed:
         already = {
             WalkInRequest.APPROVED: "was already approved",
@@ -528,7 +541,7 @@ def show_levy(session, home):
     lines = [f"Levy account for {home.address}", f"Balance: *{fmt_usd(balance)}*"]
     if acc["arrears"] > 0:
         lines.append(f"Overdue: {fmt_usd(acc['arrears'])}")
-    currencies = paynow.available_currencies()
+    currencies = paynow.available_currencies(home.estate)
     if Payment.ZWG in currencies:
         zig, rate = in_zig(balance)
         if zig is not None:
@@ -584,7 +597,7 @@ def handle_levy_amount(session, home, text, choice):
 
 def levy_amount_chosen(session, home, amount):
     session.data["amount_usd"] = str(amount)
-    currencies = paynow.available_currencies()
+    currencies = paynow.available_currencies(home.estate)
     zig, _ = in_zig(amount) if Payment.ZWG in currencies else (None, None)
     if Payment.USD in currencies and zig is not None:
         session.state = LEVY_CURRENCY

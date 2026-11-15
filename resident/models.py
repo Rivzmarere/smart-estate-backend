@@ -1,3 +1,4 @@
+from estates.models import EstateScoped
 from django.db import models
 
 from authentication.models import User
@@ -8,7 +9,7 @@ from parameters.models.models_visit_status import VisitStatus
 
 # Create your models here.
 
-class Resident(models.Model):
+class Resident(EstateScoped):
     name = models.CharField(max_length=60)
     surname = models.CharField(max_length=60)
     id_number = models.CharField(max_length=20)

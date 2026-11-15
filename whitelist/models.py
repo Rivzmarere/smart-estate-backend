@@ -1,3 +1,4 @@
+from estates.models import EstateScoped
 from django.db import models
 
 from authentication.models import User
@@ -7,7 +8,7 @@ from parameters.models.models_visit_status import VisitStatus
 
 # Create your models here.
 
-class WhiteListGuest(models.Model):
+class WhiteListGuest(EstateScoped):
     stand_number = models.IntegerField()
     home = models.CharField(max_length=200)
     visit_code = models.CharField(max_length=60)
@@ -20,7 +21,7 @@ class WhiteListGuest(models.Model):
     status = models.BooleanField(default=True)
 
 
-class WhiteList(models.Model):
+class WhiteList(EstateScoped):
     white_list_guest =  models.ForeignKey(WhiteListGuest, on_delete=models.CASCADE)
     transport_type = models.ForeignKey(TransportType, on_delete=models.CASCADE)
     date_arrived = models.DateTimeField(auto_now_add=True)

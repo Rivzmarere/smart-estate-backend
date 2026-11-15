@@ -10,6 +10,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from estates.context import use_estate
 from home.models import Home
 from smartEstateBackend.permissions import IsAdminRole
 
@@ -197,17 +198,21 @@ class PaynowResult(APIView):
     throttle_classes = []
 
     def post(self, request, payment_id):
-        payment = Payment.objects.filter(pk=payment_id).select_related("home__stand", "home__resident").first()
+        payment = Payment.all_estates.filter(pk=payment_id).select_related("estate").first()
         if payment is None:
             return HttpResponse(status=404)
+        with use_estate(payment.estate):
+            return self.apply(request, payment)
+
+    def apply(self, request, payment):
         pairs = parse_qsl(request.body.decode("utf-8", errors="replace"), keep_blank_values=True)
         before = payment.status
         try:
             with transaction.atomic():
-                payment = Payment.objects.select_for_update().get(pk=payment.pk)
+                payment = Payment.objects.select_for_update().select_related("estate").get(pk=payment.pk)
                 after = paynow.apply_status(payment, pairs)
         except paynow.PaynowError as exc:
-            logger.warning("Rejected Paynow result for payment %s: %s", payment_id, exc)
+            logger.warning("Rejected Paynow result for payment %s: %s", payment.pk, exc)
             return HttpResponse(status=400)
         if before == Payment.PENDING and after == Payment.PAID:
             send_receipt(payment)

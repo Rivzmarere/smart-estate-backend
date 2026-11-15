@@ -3,6 +3,8 @@ Walk-in approval: a visitor arrives without a code, the guard asks the
 resident on WhatsApp, and the resident taps Approve or Decline.
 """
 
+from estates.models import EstateScoped
+
 from datetime import timedelta
 
 from django.db import models
@@ -17,7 +19,7 @@ from visit.models import Visit
 REQUEST_LIFETIME = timedelta(minutes=10)
 
 
-class WalkInRequest(models.Model):
+class WalkInRequest(EstateScoped):
     PENDING = "pending"
     APPROVED = "approved"
     DECLINED = "declined"

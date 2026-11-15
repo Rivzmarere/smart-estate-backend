@@ -1,3 +1,4 @@
+from estates.models import EstateScoped
 from django.db import models
 
 from authentication.models import User
@@ -8,7 +9,7 @@ from stand.models import Stand
 
 # Create your models here.
 
-class Owner(models.Model):
+class Owner(EstateScoped):
     name = models.CharField(max_length=60)
     surname = models.CharField(max_length=60)
     id_number = models.CharField(max_length=20)

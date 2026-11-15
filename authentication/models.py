@@ -29,6 +29,10 @@ class CustomUserManager(BaseUserManager):
 class User(AbstractUser):
     username = models.CharField(max_length=45,unique=True)
     role = models.CharField(max_length=45, default="Guard")
+    estate = models.ForeignKey(
+        "estates.Estate", on_delete=models.PROTECT, null=True, blank=True, related_name="users",
+        help_text="The estate this admin or guard works for. Empty only for platform staff.",
+    )
 
     objects = CustomUserManager()
     USERNAME_FIELD = "username"

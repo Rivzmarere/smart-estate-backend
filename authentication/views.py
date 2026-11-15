@@ -15,7 +15,19 @@ from .serializer import ChangePasswordSerializer, SignUpSerializer,ReadUserSeria
 from django.shortcuts import get_object_or_404
 from datetime import timedelta
 
+from estates.context import ALL, current_estate
+from estates.models import Estate
 from smartEstateBackend.permissions import ROLE_GUARD, IsAdminRole, is_admin
+
+
+def estate_users():
+    """Staff accounts of the current estate (every account for platform staff)."""
+    estate = current_estate()
+    if estate is ALL:
+        return User.objects.all()
+    if estate is None:
+        return User.objects.none()
+    return User.objects.filter(estate=estate)
 
 GUARD_SESSION = timedelta(hours=12)
 class SignUpView(GenericAPIView):
@@ -26,7 +38,14 @@ class SignUpView(GenericAPIView):
     def post(self, request: Request):
         serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
-            serializer.save()
+            estate = current_estate()
+            if estate is ALL:  # platform staff say which estate the account is for
+                estate = Estate.objects.filter(pk=request.data.get("estate")).first()
+                if estate is None:
+                    return Response({"estate": "Choose the estate this account belongs to."}, status=status.HTTP_400_BAD_REQUEST)
+            if estate is None:
+                return Response({"estate": "No estate selected."}, status=status.HTTP_400_BAD_REQUEST)
+            serializer.save(estate=estate)
             response = {"message": "User created successfully", "data": serializer.data}
             return Response(data=response, status=status.HTTP_201_CREATED)
         return Response(data=serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -36,7 +55,7 @@ class AllUserList(GenericAPIView):
     permission_classes = [IsAdminRole]
     serializer_class = ReadUserSerializer 
     def get(self, request, format=None):
-        users = User.objects.all()
+        users = estate_users()
         serializer = ReadUserSerializer(users, many=True)
         return Response(
             serializer.data, status=status.HTTP_200_OK)
@@ -48,7 +67,7 @@ class AllUserPaginated(GenericAPIView):
         sort = request.GET.get('sort')
         page = int(request.GET.get('page',1))
         per_page = 9
-        users = User.objects.all()
+        users = estate_users()
         if sort =='asc':
             users = users.order_by('date_joined')
         
@@ -69,7 +88,7 @@ class UserDetails(GenericAPIView):
     permission_classes = [IsAdminRole]
     serializer_class = ReadUserSerializer
     def getObject(self, id):
-        return get_object_or_404(User, pk=id)
+        return get_object_or_404(estate_users(), pk=id)
         
     def get(self, request, id, format=None):
             complain = self.getObject(id)
@@ -85,6 +104,10 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
         token['email'] = user.email
         token['username'] = user.username
         token['name'] = user.get_full_name() or user.username
+        estate = user.estate or (None if user.is_superuser else Estate.objects.filter(active=True).first())
+        token['estate'] = estate.name if estate else "All estates"
+        token['estate_slug'] = estate.slug if estate else ""
+        token['platform'] = bool(user.is_superuser and not user.estate_id)
         return token
 
     def validate(self, attrs):
@@ -115,7 +138,9 @@ class ChangePasswordView(GenericAPIView):
         permission_classes = (IsAuthenticated,)
 
         def get_object(self, id):
-            return get_object_or_404(User, pk=id)
+            if int(id) == self.request.user.pk:
+                return self.request.user
+            return get_object_or_404(estate_users(), pk=id)
 
         def put(self, request, id, *args, **kwargs):
             self.object = self.get_object(id)

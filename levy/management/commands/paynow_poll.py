@@ -9,6 +9,7 @@ from django.core.management.base import BaseCommand
 from django.db import transaction
 from django.utils import timezone
 
+from estates.context import use_estate
 from levy import paynow
 from levy.models import Payment
 from levy.notifications import send_payment_failed, send_receipt
@@ -23,24 +24,29 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         now = timezone.now()
         checked = 0
-        for payment in Payment.objects.filter(status=Payment.PENDING, created_at__lte=now - timedelta(minutes=1)):
+        pending = Payment.all_estates.filter(status=Payment.PENDING, created_at__lte=now - timedelta(minutes=1)).select_related("estate")
+        for payment in pending:
             checked += 1
-            try:
-                with transaction.atomic():
-                    locked = Payment.objects.select_for_update().get(pk=payment.pk)
-                    if locked.status != Payment.PENDING:
-                        continue
-                    status = paynow.poll(locked)
-                    if status == Payment.PENDING and locked.created_at < now - GIVE_UP_AFTER:
-                        locked.status = Payment.FAILED
-                        locked.failure_reason = "No answer from Paynow within 24 hours"
-                        locked.save(update_fields=["status", "failure_reason"])
-                        status = Payment.FAILED
-            except paynow.PaynowError as exc:
-                self.stderr.write(f"Payment {payment.pk}: {exc}")
-                continue
-            if status == Payment.PAID:
-                send_receipt(locked)
-            elif status in (Payment.FAILED, Payment.CANCELLED):
-                send_payment_failed(locked)
+            with use_estate(payment.estate):
+                self.check(payment, now)
         self.stdout.write(f"Checked {checked} pending payment(s)")
+
+    def check(self, payment, now):
+        try:
+            with transaction.atomic():
+                locked = Payment.objects.select_for_update().get(pk=payment.pk)
+                if locked.status != Payment.PENDING:
+                    return
+                status = paynow.poll(locked)
+                if status == Payment.PENDING and locked.created_at < now - GIVE_UP_AFTER:
+                    locked.status = Payment.FAILED
+                    locked.failure_reason = "No answer from Paynow within 24 hours"
+                    locked.save(update_fields=["status", "failure_reason"])
+                    status = Payment.FAILED
+        except paynow.PaynowError as exc:
+            self.stderr.write(f"Payment {payment.pk}: {exc}")
+            return
+        if status == Payment.PAID:
+            send_receipt(locked)
+        elif status in (Payment.FAILED, Payment.CANCELLED):
+            send_payment_failed(locked)

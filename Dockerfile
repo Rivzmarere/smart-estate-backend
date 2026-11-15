@@ -11,10 +11,10 @@ RUN pip install -r requirements.txt
 
 COPY . .
 
-RUN useradd --create-home appuser && chown -R appuser /app
+RUN useradd --create-home appuser && mkdir -p /data/media && chown -R appuser /app /data
 USER appuser
 
 EXPOSE 8000
 
 # Apply migrations and collect static files, then serve with gunicorn.
-CMD ["sh", "-c", "python manage.py migrate --noinput && python manage.py collectstatic --noinput && gunicorn smartEstateBackend.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 60"]
+CMD ["sh", "-c", "python manage.py migrate --noinput && python manage.py collectstatic --noinput && gunicorn smartEstateBackend.wsgi:application --bind 0.0.0.0:8000 --workers 3 --timeout 60 --access-logfile -"]

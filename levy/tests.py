@@ -241,7 +241,7 @@ class PaynowTests(LevyFixture):
     def test_poll_command_gives_up_after_a_day(self):
         payment = self.pending()
         Payment.objects.filter(pk=payment.pk).update(created_at=timezone.now() - datetime.timedelta(days=2))
-        call_command("paynow_poll", stdout=StringIO())
+        call_command("paynow_poll", stdout=StringIO(), skip_checks=False)  # like the server runs it
         payment.refresh_from_db()
         self.assertEqual(payment.status, Payment.FAILED)
 

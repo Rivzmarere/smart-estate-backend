@@ -28,10 +28,10 @@ class Command(BaseCommand):
         for payment in pending:
             checked += 1
             with use_estate(payment.estate):
-                self.check(payment, now)
+                self.check_payment(payment, now)
         self.stdout.write(f"Checked {checked} pending payment(s)")
 
-    def check(self, payment, now):
+    def check_payment(self, payment, now):
         try:
             with transaction.atomic():
                 locked = Payment.objects.select_for_update().get(pk=payment.pk)

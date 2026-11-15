@@ -4,9 +4,12 @@ from parameters.serializers.serializer_provider_category import ProviderCategory
 from rest_framework.generics import GenericAPIView
 from rest_framework.response import Response
 from rest_framework import status
+from django.shortcuts import get_object_or_404
+from smartEstateBackend.permissions import PublicReadAdminWrite
 # Create your views here.
 
 class ProviderCategoryList(GenericAPIView):
+    permission_classes = [PublicReadAdminWrite]
     serializer_class = ProviderCategoryReadSerializer
     def get(self, request, format=None):
             provider_category = ProviderCategory.objects.all()
@@ -21,6 +24,7 @@ class ProviderCategoryList(GenericAPIView):
             return Response(status=status.HTTP_400_BAD_REQUEST)
 
 class ProviderCategoryPaginated(GenericAPIView):
+    permission_classes = [PublicReadAdminWrite]
     serializer_class = ProviderCategoryReadSerializer
     def get(self, request, format=None):
         sort = 'asc'
@@ -54,12 +58,10 @@ class ProviderCategoryPaginated(GenericAPIView):
 
 
 class ProviderCategoryDetails(GenericAPIView):
+    permission_classes = [PublicReadAdminWrite]
     serializer_class = ProviderCategoryReadSerializer
     def getObject(self, id):
-        try:
-            return ProviderCategory.objects.get(pk=id)
-        except ProviderCategory.DoesNotExist:
-            return Response(status=status.HTTP_404_NOT_FOUND)
+        return get_object_or_404(ProviderCategory, pk=id)
         
     def get(self, request, id, format=None):
             provider_category = self.getObject(id)

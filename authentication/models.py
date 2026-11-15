@@ -28,7 +28,7 @@ class CustomUserManager(BaseUserManager):
 
 class User(AbstractUser):
     username = models.CharField(max_length=45,unique=True)
-    role = models.CharField(max_length=45, default="Admin")
+    role = models.CharField(max_length=45, default="Guard")
 
     objects = CustomUserManager()
     USERNAME_FIELD = "username"

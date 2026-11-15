@@ -14,7 +14,7 @@ class Home(models.Model):
    address = models.CharField(max_length=200)
    resident = models.ForeignKey(Resident, on_delete=models.CASCADE,null=True,blank=True)
    home_status = models.ForeignKey(HomeStatus, on_delete=models.CASCADE)
-   authorized_by = models.ForeignKey(User, on_delete=models.CASCADE)
+   authorized_by = models.ForeignKey(User, on_delete=models.PROTECT)
    date_created = models.DateTimeField(auto_now_add=True)
    status = models.BooleanField(default=True)
 

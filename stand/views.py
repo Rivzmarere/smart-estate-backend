@@ -4,9 +4,12 @@ from .serializer import StandReadSerializer, StandWriteSerializer
 from rest_framework.generics import GenericAPIView
 from rest_framework.response import Response
 from rest_framework import status
+from django.shortcuts import get_object_or_404
+from smartEstateBackend.permissions import StaffReadAdminWrite
 # Create your views here.
 
 class StandList(GenericAPIView):
+    permission_classes = [StaffReadAdminWrite]
     serializer_class = StandReadSerializer
     def get(self, request, format=None):
             stands = Stand.objects.all()
@@ -21,6 +24,7 @@ class StandList(GenericAPIView):
             return Response(status=status.HTTP_400_BAD_REQUEST)
 
 class StandPaginated(GenericAPIView):
+    permission_classes = [StaffReadAdminWrite]
     serializer_class = StandReadSerializer
     def get(self, request, format=None):
         sort = 'asc'
@@ -54,12 +58,10 @@ class StandPaginated(GenericAPIView):
 
 
 class StandDetails(GenericAPIView):
+    permission_classes = [StaffReadAdminWrite]
     serializer_class = StandReadSerializer
     def getObject(self, id):
-        try:
-            return Stand.objects.get(pk=id)
-        except Stand.DoesNotExist:
-            return Response(status=status.HTTP_404_NOT_FOUND)
+        return get_object_or_404(Stand, pk=id)
         
     def get(self, request, id, format=None):
             stand = self.getObject(id)

@@ -4,9 +4,12 @@ from parameters.serializers.serializer_nationality import NationalityReadSeriali
 from rest_framework.generics import GenericAPIView
 from rest_framework.response import Response
 from rest_framework import status
+from django.shortcuts import get_object_or_404
+from smartEstateBackend.permissions import PublicReadAdminWrite
 # Create your views here.
 
 class NationalityList(GenericAPIView):
+    permission_classes = [PublicReadAdminWrite]
     serializer_class = NationalityReadSerializer
     def get(self, request, format=None):
             nationality = Nationality.objects.all()
@@ -21,6 +24,7 @@ class NationalityList(GenericAPIView):
             return Response(status=status.HTTP_400_BAD_REQUEST)
 
 class NationalityPaginated(GenericAPIView):
+    permission_classes = [PublicReadAdminWrite]
     serializer_class = NationalityReadSerializer
     def get(self, request, format=None):
         sort = 'asc'
@@ -54,12 +58,10 @@ class NationalityPaginated(GenericAPIView):
 
 
 class NationalityDetails(GenericAPIView):
+    permission_classes = [PublicReadAdminWrite]
     serializer_class = NationalityReadSerializer
     def getObject(self, id):
-        try:
-            return Nationality.objects.get(pk=id)
-        except Nationality.DoesNotExist:
-            return Response(status=status.HTTP_404_NOT_FOUND)
+        return get_object_or_404(Nationality, pk=id)
         
     def get(self, request, id, format=None):
             nationality = self.getObject(id)

@@ -4,9 +4,12 @@ from parameters.serializers.serializer_user_type import UserTypeReadSerializer, 
 from rest_framework.generics import GenericAPIView
 from rest_framework.response import Response
 from rest_framework import status
+from django.shortcuts import get_object_or_404
+from smartEstateBackend.permissions import PublicReadAdminWrite
 # Create your views here.
 
 class UserTypeList(GenericAPIView):
+    permission_classes = [PublicReadAdminWrite]
     serializer_class = UserTypeReadSerializer
     def get(self, request, format=None):
             user_type = UserType.objects.all()
@@ -21,6 +24,7 @@ class UserTypeList(GenericAPIView):
             return Response(status=status.HTTP_400_BAD_REQUEST)
 
 class UserTypePaginated(GenericAPIView):
+    permission_classes = [PublicReadAdminWrite]
     serializer_class = UserTypeReadSerializer
     def get(self, request, format=None):
         sort = 'asc'
@@ -54,12 +58,10 @@ class UserTypePaginated(GenericAPIView):
 
 
 class UserTypeDetails(GenericAPIView):
+    permission_classes = [PublicReadAdminWrite]
     serializer_class = UserTypeReadSerializer
     def getObject(self, id):
-        try:
-            return UserType.objects.get(pk=id)
-        except UserType.DoesNotExist:
-            return Response(status=status.HTTP_404_NOT_FOUND)
+        return get_object_or_404(UserType, pk=id)
         
     def get(self, request, id, format=None):
             user_type = self.getObject(id)

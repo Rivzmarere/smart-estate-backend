@@ -4,9 +4,12 @@ from .serializer import OwnerReadSerializer, OwnerWriteSerializer
 from rest_framework.generics import GenericAPIView
 from rest_framework.response import Response
 from rest_framework import status
+from django.shortcuts import get_object_or_404
+from smartEstateBackend.permissions import StaffReadAdminWrite
 # Create your views here.
 
 class OwnerList(GenericAPIView):
+    permission_classes = [StaffReadAdminWrite]
     serializer_class = OwnerReadSerializer
     def get(self, request, format=None):
             owners = Owner.objects.all()
@@ -21,6 +24,7 @@ class OwnerList(GenericAPIView):
             return Response(status=status.HTTP_400_BAD_REQUEST)
 
 class OwnerPaginated(GenericAPIView):
+    permission_classes = [StaffReadAdminWrite]
     serializer_class = OwnerReadSerializer
     def get(self, request, format=None):
         sort = 'asc'
@@ -46,12 +50,10 @@ class OwnerPaginated(GenericAPIView):
 
 
 class OwnerDetails(GenericAPIView):
+    permission_classes = [StaffReadAdminWrite]
     serializer_class = OwnerReadSerializer
     def getObject(self, id):
-        try:
-            return Owner.objects.get(pk=id)
-        except Owner.DoesNotExist:
-            return Response(status=status.HTTP_404_NOT_FOUND)
+        return get_object_or_404(Owner, pk=id)
         
     def get(self, request, id, format=None):
             owner = self.getObject(id)

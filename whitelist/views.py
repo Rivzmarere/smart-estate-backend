@@ -7,9 +7,13 @@ from rest_framework.response import Response
 from rest_framework import status
 from visit.utilities import random_numbers,search_auth,search_home
 from django.db.models import Q
+from django.utils import timezone
+from django.shortcuts import get_object_or_404
+from smartEstateBackend.permissions import IsAdminOrGuard
 # Create your views here.
 
 class WhiteListGuestList(GenericAPIView):
+    permission_classes = [IsAdminOrGuard]
     serializer_class = WhiteListGuestReadSerializer
     def get(self, request, format=None):
             white_list_guests = WhiteListGuest.objects.all()
@@ -31,6 +35,7 @@ class WhiteListGuestList(GenericAPIView):
             return Response(status=status.HTTP_400_BAD_REQUEST)
 
 class WhiteListGuestPaginated(GenericAPIView):
+    permission_classes = [IsAdminOrGuard]
     serializer_class = WhiteListGuestReadSerializer
     def get(self, request, format=None):
         sort = 'asc'
@@ -62,12 +67,10 @@ class WhiteListGuestPaginated(GenericAPIView):
 
 
 class WhiteListGuestDetails(GenericAPIView):
+    permission_classes = [IsAdminOrGuard]
     serializer_class = WhiteListGuestReadSerializer
     def getObject(self, id):
-        try:
-            return WhiteListGuest.objects.get(pk=id)
-        except WhiteListGuest.DoesNotExist:
-            return Response(status=status.HTTP_404_NOT_FOUND)
+        return get_object_or_404(WhiteListGuest, pk=id)
         
     def get(self, request, id, format=None):
             white_list_guest = self.getObject(id)
@@ -90,6 +93,7 @@ class WhiteListGuestDetails(GenericAPIView):
 
 
 class WhiteListPaginated(GenericAPIView):
+    permission_classes = [IsAdminOrGuard]
     serializer_class = WhiteListReadSerializer
     def get(self, request, format=None):
         sort = 'asc'
@@ -120,28 +124,27 @@ class WhiteListPaginated(GenericAPIView):
         })
 
 class WhiteListBookInDetails(GenericAPIView):
-   def post(self, request):
-            serializer = WhiteListBookInSerializer(data=request.data)
-            if serializer.is_valid():
-                    serializer.save()
-                    return Response(serializer.data, status=status.HTTP_201_CREATED)
-            return Response(status=status.HTTP_400_BAD_REQUEST)
-        
+    permission_classes = [IsAdminOrGuard]
+
+    def post(self, request):
+        serializer = WhiteListBookInSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save(authorized_by=request.user)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class WhiteListBookOutDetails(GenericAPIView):
+    permission_classes = [IsAdminOrGuard]
     serializer_class = WhiteListReadSerializer
     def getObject(self, id):
-        try:
-            return WhiteList.objects.get(pk=id)
-        except WhiteList.DoesNotExist:
-            return Response(status=status.HTTP_404_NOT_FOUND)
+        return get_object_or_404(WhiteList, pk=id)
         
     def put(self, request, id, format=None):
             white_list = self.getObject(id)
             serializer = WhiteListBookOutSerializer(white_list, data=request.data)
             if serializer.is_valid():
-                serializer.save(status=False)
+                serializer.save(status=False, date_depature=timezone.now())
                 return Response(serializer.data, status=status.HTTP_201_CREATED)
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         

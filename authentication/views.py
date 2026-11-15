@@ -3,41 +3,33 @@ from rest_framework import  status
 from rest_framework.generics import GenericAPIView
 from rest_framework.request import Request
 from rest_framework.response import Response
-from django.contrib.sites.shortcuts import get_current_site
-from django.urls import reverse
 from .models import User
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework_simplejwt.views import TokenObtainPairView
-from rest_framework.permissions import IsAuthenticated
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
+from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.throttling import ScopedRateThrottle
 from .serializer import ChangePasswordSerializer, SignUpSerializer,ReadUserSerializer,UpdateUserSerializer
 
+from django.shortcuts import get_object_or_404
+from smartEstateBackend.permissions import IsAdminRole, is_admin
 class SignUpView(GenericAPIView):
+    """Create a staff account. Only administrators can create users."""
+    permission_classes = [IsAdminRole]
     serializer_class = SignUpSerializer
-    permission_classes = []
+
     def post(self, request: Request):
-        data = request.data
-        username = data.get("username")
-        email = data.get("email")
-        serializer = self.serializer_class(data=data)
+        serializer = self.serializer_class(data=request.data)
         if serializer.is_valid():
             serializer.save()
-            print(data)
-            current_site = get_current_site(request).domain
-            relativeLink = reverse('signUp')
-            absurl = 'http://'+current_site+relativeLink
-            email_body = 'Hi '+ username + \
-                ' Use the link below to verify your email \n' + absurl
-            data = {'email_body': email_body, 'to_email': email,
-                    'email_subject': 'Verify your email'}
-            # Util.send_email(data)
-            response = {"message": "User Created Successfully Check Email For verification Link", "data": serializer.data}
+            response = {"message": "User created successfully", "data": serializer.data}
             return Response(data=response, status=status.HTTP_201_CREATED)
-
         return Response(data=serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-
 class AllUserList(GenericAPIView):
+    permission_classes = [IsAdminRole]
     serializer_class = ReadUserSerializer 
     def get(self, request, format=None):
         users = User.objects.all()
@@ -46,6 +38,7 @@ class AllUserList(GenericAPIView):
             serializer.data, status=status.HTTP_200_OK)
 
 class AllUserPaginated(GenericAPIView):
+    permission_classes = [IsAdminRole]
     serializer_class = ReadUserSerializer 
     def get(self, request, format=None):
         sort = request.GET.get('sort')
@@ -69,12 +62,10 @@ class AllUserPaginated(GenericAPIView):
         })
 
 class UserDetails(GenericAPIView):
+    permission_classes = [IsAdminRole]
     serializer_class = ReadUserSerializer
     def getObject(self, id):
-        try:
-            return User.objects.get(pk=id)
-        except User.DoesNotExist:
-            return Response(status=status.HTTP_404_NOT_FOUND)
+        return get_object_or_404(User, pk=id)
         
     def get(self, request, id, format=None):
             complain = self.getObject(id)
@@ -95,6 +86,9 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
         return token
 class MyTokenObtainPairView(TokenObtainPairView):
     serializer_class = MyTokenObtainPairSerializer
+    permission_classes = [AllowAny]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "login"
 
 
 class ChangePasswordView(GenericAPIView):
@@ -106,28 +100,29 @@ class ChangePasswordView(GenericAPIView):
         permission_classes = (IsAuthenticated,)
 
         def get_object(self, id):
-            try:
-                return User.objects.get(pk=id)
-            except User.DoesNotExist:
-                return Response(status=status.HTTP_404_NOT_FOUND)
+            return get_object_or_404(User, pk=id)
 
-        def put(self, request,id, *args, **kwargs):
+        def put(self, request, id, *args, **kwargs):
             self.object = self.get_object(id)
+            # Users may change only their own password; admins may change anyone's.
+            if self.object.pk != request.user.pk and not is_admin(request.user):
+                return Response({"errors": "You can only change your own password."}, status=status.HTTP_403_FORBIDDEN)
             serializer = self.get_serializer(data=request.data)
-
-            if serializer.is_valid():
-                # Check old password
-                if not self.object.check_password(serializer.data.get("old_password")):
-                    return Response({"old_password": "Wrong password. Old Password"}, status=status.HTTP_400_BAD_REQUEST)
-                # set_password also hashes the password that the user will get
-                self.object.set_password(serializer.data.get("new_password"))
-                self.object.save()
-                response = {
-                    'status': 'success',
-                    'code': status.HTTP_200_OK,
-                    'message': 'Password updated successfully',
-                }
-                return Response(data=response, status=status.HTTP_200_OK)
+            if not serializer.is_valid():
+                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            if not self.object.check_password(serializer.data.get("old_password")):
+                return Response({"old_password": "Wrong password. Old Password"}, status=status.HTTP_400_BAD_REQUEST)
+            new_password = serializer.data.get("new_password")
+            try:
+                validate_password(new_password, user=self.object)
+            except DjangoValidationError as exc:
+                return Response({"new_password": list(exc.messages)}, status=status.HTTP_400_BAD_REQUEST)
+            self.object.set_password(new_password)
+            self.object.save()
+            return Response(
+                {"status": "success", "code": status.HTTP_200_OK, "message": "Password updated successfully"},
+                status=status.HTTP_200_OK,
+            )
 
 
 # class ResetPassword(GenericAPIView):

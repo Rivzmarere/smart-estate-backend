@@ -1,8 +1,11 @@
-from dataclasses import fields
 from rest_framework import serializers
+
+from authentication.serializer import UserSummarySerializer
 from .models import Visit
 
 class VisitReadSerializer(serializers.ModelSerializer):
+    authorized_by = UserSummarySerializer(read_only=True)
+
     class Meta:
         model = Visit
         fields = '__all__'

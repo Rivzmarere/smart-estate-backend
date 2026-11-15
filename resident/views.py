@@ -5,9 +5,12 @@ from rest_framework.generics import GenericAPIView
 from rest_framework.response import Response
 from rest_framework import status
 from django.db.models import Q
+from django.shortcuts import get_object_or_404
+from smartEstateBackend.permissions import StaffReadAdminWrite
 # Create your views here.
 
 class ResidentList(GenericAPIView):
+    permission_classes = [StaffReadAdminWrite]
     serializer_class = ResidentReadSerializer
     def get(self, request, format=None):
             residents = Resident.objects.all()
@@ -22,6 +25,7 @@ class ResidentList(GenericAPIView):
             return Response(status=status.HTTP_400_BAD_REQUEST)
 
 class ResidentPaginated(GenericAPIView):
+    permission_classes = [StaffReadAdminWrite]
     serializer_class = ResidentReadSerializer
     def get(self, request, format=None):
         sort = 'asc'
@@ -53,12 +57,10 @@ class ResidentPaginated(GenericAPIView):
 
 
 class ResidentDetails(GenericAPIView):
+    permission_classes = [StaffReadAdminWrite]
     serializer_class = ResidentReadSerializer
     def getObject(self, id):
-        try:
-            return Resident.objects.get(pk=id)
-        except Resident.DoesNotExist:
-            return Response(status=status.HTTP_404_NOT_FOUND)
+        return get_object_or_404(Resident, pk=id)
         
     def get(self, request, id, format=None):
             resident = self.getObject(id)

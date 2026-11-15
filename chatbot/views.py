@@ -6,9 +6,11 @@ from rest_framework.generics import GenericAPIView
 from rest_framework.response import Response
 from rest_framework import status
 
+from smartEstateBackend.permissions import IsAdminRole
 # Create your views here.
 
 class ChatList(GenericAPIView):
+    permission_classes = [IsAdminRole]
     serializer_class = ChatReadSerializer
     def post(self, request):
             serializer = ChatWriteSerializer(data=request.data)

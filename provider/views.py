@@ -1,17 +1,23 @@
 import math
 from .models import Provider
-from .serializer import ProviderReadSerializer, ProviderWriteSerializer
+from .serializer import ProviderPublicSerializer, ProviderReadSerializer, ProviderWriteSerializer
 from rest_framework.generics import GenericAPIView
 from rest_framework.response import Response
 from rest_framework import status
 from django.db.models import Q
+from django.shortcuts import get_object_or_404
+from smartEstateBackend.permissions import is_staff_member, PublicReadAdminWrite, StaffReadAdminWrite
 # Create your views here.
 
 class ProviderList(GenericAPIView):
+    permission_classes = [PublicReadAdminWrite]
     serializer_class = ProviderReadSerializer
+
+    def read_serializer(self):
+        return ProviderReadSerializer if is_staff_member(self.request.user) else ProviderPublicSerializer
     def get(self, request, format=None):
             providers = Provider.objects.all()
-            serializer = ProviderReadSerializer(providers, many=True)
+            serializer = self.read_serializer()(providers, many=True)
             return Response(serializer.data, status=status.HTTP_200_OK)
 
     def post(self, request):
@@ -22,7 +28,11 @@ class ProviderList(GenericAPIView):
             return Response(status=status.HTTP_400_BAD_REQUEST)
 
 class ProviderPaginated(GenericAPIView):
+    permission_classes = [PublicReadAdminWrite]
     serializer_class = ProviderReadSerializer
+
+    def read_serializer(self):
+        return ProviderReadSerializer if is_staff_member(self.request.user) else ProviderPublicSerializer
     def get(self, request, format=None):
         sort = 'asc'
         page = int(request.GET.get('page',1))
@@ -39,7 +49,7 @@ class ProviderPaginated(GenericAPIView):
         start = (page - 1) * per_page
         end = page * per_page
 
-        serializer = ProviderReadSerializer(providers[start:end], many=True)
+        serializer = self.read_serializer()(providers[start:end], many=True)
         return Response({
             'data':serializer.data,
             'total': total,
@@ -50,12 +60,10 @@ class ProviderPaginated(GenericAPIView):
 
 
 class ProviderDetails(GenericAPIView):
+    permission_classes = [StaffReadAdminWrite]
     serializer_class = ProviderReadSerializer
     def getObject(self, id):
-        try:
-            return Provider.objects.get(pk=id)
-        except Provider.DoesNotExist:
-            return Response(status=status.HTTP_404_NOT_FOUND)
+        return get_object_or_404(Provider, pk=id)
         
     def get(self, request, id, format=None):
             provider = self.getObject(id)

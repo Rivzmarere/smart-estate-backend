@@ -5,9 +5,15 @@ from rest_framework.generics import GenericAPIView
 from rest_framework.response import Response
 from rest_framework import status
 from .utilities import random_numbers,search_auth,search_home
+from django.shortcuts import get_object_or_404
+from smartEstateBackend.permissions import IsAdminOrGuard, IsAdminRole, PublicCreateStaffRead
+from rest_framework.throttling import ScopedRateThrottle
 # Create your views here.
 
 class ComplainList(GenericAPIView):
+    permission_classes = [PublicCreateStaffRead]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "public_booking"
     serializer_class = ComplainReadSerializer
     def get(self, request, format=None):
             complains = Complain.objects.all()
@@ -17,7 +23,6 @@ class ComplainList(GenericAPIView):
     def post(self, request):
             serializer = ComplainWriteSerializer(data=request.data)
             if serializer.is_valid():
-                print('ndapinda')
                 is_visit_valid = search_auth(request.data["stand_number"],request.data["resident_phone_number"])
                 if (is_visit_valid == True):
                     home_address =search_home(request.data["stand_number"])
@@ -34,6 +39,7 @@ class ComplainList(GenericAPIView):
             return Response(status=status.HTTP_400_BAD_REQUEST)
 
 class ComplainPaginated(GenericAPIView):
+    permission_classes = [IsAdminOrGuard]
     serializer_class = ComplainReadSerializer
     def get(self, request, format=None):
         sort = 'asc'
@@ -59,12 +65,10 @@ class ComplainPaginated(GenericAPIView):
 
 
 class ComplainDetails(GenericAPIView):
+    permission_classes = [IsAdminRole]
     serializer_class = ComplainReadSerializer
     def getObject(self, id):
-        try:
-            return Complain.objects.get(pk=id)
-        except Complain.DoesNotExist:
-            return Response(status=status.HTTP_404_NOT_FOUND)
+        return get_object_or_404(Complain, pk=id)
         
     def get(self, request, id, format=None):
             complain = self.getObject(id)
@@ -86,12 +90,10 @@ class ComplainDetails(GenericAPIView):
 
 
 class ComplainAssignDetails(GenericAPIView):
+    permission_classes = [IsAdminRole]
     serializer_class = ComplainReadSerializer
     def getObject(self, id):
-        try:
-            return Complain.objects.get(pk=id)
-        except Complain.DoesNotExist:
-            return Response(status=status.HTTP_404_NOT_FOUND)
+        return get_object_or_404(Complain, pk=id)
         
     def put(self, request, id, format=None):
             complain = self.getObject(id)
@@ -104,12 +106,10 @@ class ComplainAssignDetails(GenericAPIView):
 
 
 class ComplainUpdateStatusDetails(GenericAPIView):
+    permission_classes = [IsAdminRole]
     serializer_class = ComplainReadSerializer
     def getObject(self, id):
-        try:
-            return Complain.objects.get(pk=id)
-        except Complain.DoesNotExist:
-            return Response(status=status.HTTP_404_NOT_FOUND)
+        return get_object_or_404(Complain, pk=id)
         
     def put(self, request, id, format=None):
             complain = self.getObject(id)

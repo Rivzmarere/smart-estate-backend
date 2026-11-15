@@ -4,9 +4,12 @@ from parameters.serializers.serializer_transport_type import TransportTypeReadSe
 from rest_framework.generics import GenericAPIView
 from rest_framework.response import Response
 from rest_framework import status
+from django.shortcuts import get_object_or_404
+from smartEstateBackend.permissions import PublicReadAdminWrite
 # Create your views here.
 
 class TransportTypeList(GenericAPIView):
+    permission_classes = [PublicReadAdminWrite]
     serializer_class = TransportTypeReadSerializer
     def get(self, request, format=None):
             transport_type = TransportType.objects.all()
@@ -21,6 +24,7 @@ class TransportTypeList(GenericAPIView):
             return Response(status=status.HTTP_400_BAD_REQUEST)
 
 class TransportTypePaginated(GenericAPIView):
+    permission_classes = [PublicReadAdminWrite]
     serializer_class = TransportTypeReadSerializer
     def get(self, request, format=None):
         sort = 'asc'
@@ -54,12 +58,10 @@ class TransportTypePaginated(GenericAPIView):
 
 
 class TransportTypeDetails(GenericAPIView):
+    permission_classes = [PublicReadAdminWrite]
     serializer_class = TransportTypeReadSerializer
     def getObject(self, id):
-        try:
-            return TransportType.objects.get(pk=id)
-        except TransportType.DoesNotExist:
-            return Response(status=status.HTTP_404_NOT_FOUND)
+        return get_object_or_404(TransportType, pk=id)
         
     def get(self, request, id, format=None):
             transport_type = self.getObject(id)

@@ -4,9 +4,12 @@ from parameters.serializers.serializer_home_status import HomeStatusReadSerializ
 from rest_framework.generics import GenericAPIView
 from rest_framework.response import Response
 from rest_framework import status
+from django.shortcuts import get_object_or_404
+from smartEstateBackend.permissions import PublicReadAdminWrite
 # Create your views here.
 
 class HomeStatusList(GenericAPIView):
+    permission_classes = [PublicReadAdminWrite]
     serializer_class = HomeStatusReadSerializer
     def get(self, request, format=None):
             home_status = HomeStatus.objects.all()
@@ -21,6 +24,7 @@ class HomeStatusList(GenericAPIView):
             return Response(status=status.HTTP_400_BAD_REQUEST)
 
 class HomeStatusPaginated(GenericAPIView):
+    permission_classes = [PublicReadAdminWrite]
     serializer_class = HomeStatusReadSerializer
     def get(self, request, format=None):
         sort = 'asc'
@@ -54,12 +58,10 @@ class HomeStatusPaginated(GenericAPIView):
 
 
 class HomeStatusDetails(GenericAPIView):
+    permission_classes = [PublicReadAdminWrite]
     serializer_class = HomeStatusReadSerializer
     def getObject(self, id):
-        try:
-            return HomeStatus.objects.get(pk=id)
-        except HomeStatus.DoesNotExist:
-            return Response(status=status.HTTP_404_NOT_FOUND)
+        return get_object_or_404(HomeStatus, pk=id)
         
     def get(self, request, id, format=None):
             home_status = self.getObject(id)

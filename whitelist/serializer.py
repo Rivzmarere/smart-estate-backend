@@ -1,8 +1,11 @@
-from dataclasses import fields
 from rest_framework import serializers
+
+from authentication.serializer import UserSummarySerializer
 from .models import WhiteList, WhiteListGuest
 
 class WhiteListGuestReadSerializer(serializers.ModelSerializer):
+    authorized_by = UserSummarySerializer(read_only=True)
+
     class Meta:
         model = WhiteListGuest
         fields = '__all__'
@@ -16,6 +19,8 @@ class WhiteListGuestWriteSerializer(serializers.ModelSerializer):
 
 
 class WhiteListReadSerializer(serializers.ModelSerializer):
+    authorized_by = UserSummarySerializer(read_only=True)
+
     class Meta:
         model = WhiteList
         fields = '__all__'

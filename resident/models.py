@@ -9,8 +9,8 @@ from parameters.models.models_visit_status import VisitStatus
 # Create your models here.
 
 class Resident(models.Model):
-    name = models.CharField(max_length=20)
-    surname = models.CharField(max_length=20)
+    name = models.CharField(max_length=60)
+    surname = models.CharField(max_length=60)
     id_number = models.CharField(max_length=20)
     date_of_birth = models.DateField()
     gender = models.ForeignKey(Gender, on_delete=models.CASCADE)
@@ -23,5 +23,5 @@ class Resident(models.Model):
     date_created = models.DateTimeField(auto_now_add=True)
     date_edited = models.DateTimeField(auto_now=True)
     status = models.BooleanField(default=True)
-    authorized_by = models.ForeignKey(User, on_delete=models.CASCADE)
+    authorized_by = models.ForeignKey(User, on_delete=models.PROTECT)
 

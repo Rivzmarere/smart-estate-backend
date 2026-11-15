@@ -8,5 +8,5 @@ class Stand(models.Model):
     stand_status = models.ForeignKey(StandStatus,on_delete=models.CASCADE)
     date_created = models.DateTimeField(auto_now_add=True)
     date_edited = models.DateTimeField(auto_now=True)
-    authorized_by = models.ForeignKey(User, on_delete=models.CASCADE)
+    authorized_by = models.ForeignKey(User, on_delete=models.PROTECT)
     status = models.BooleanField(default=True)

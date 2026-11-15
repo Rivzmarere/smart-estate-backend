@@ -4,9 +4,12 @@ from parameters.serializers.serializer_complaint_status import ComplaintStatusRe
 from rest_framework.generics import GenericAPIView
 from rest_framework.response import Response
 from rest_framework import status
+from django.shortcuts import get_object_or_404
+from smartEstateBackend.permissions import PublicReadAdminWrite
 # Create your views here.
 
 class ComplaintStatusList(GenericAPIView):
+    permission_classes = [PublicReadAdminWrite]
     serializer_class = ComplaintStatusReadSerializer
     def get(self, request, format=None):
             complaint_status = ComplaintStatus.objects.all()
@@ -21,6 +24,7 @@ class ComplaintStatusList(GenericAPIView):
             return Response(status=status.HTTP_400_BAD_REQUEST)
 
 class ComplaintStatusPaginated(GenericAPIView):
+    permission_classes = [PublicReadAdminWrite]
     serializer_class = ComplaintStatusReadSerializer
     def get(self, request, format=None):
         sort = 'asc'
@@ -55,12 +59,10 @@ class ComplaintStatusPaginated(GenericAPIView):
 
 
 class ComplaintStatusDetails(GenericAPIView):
+    permission_classes = [PublicReadAdminWrite]
     serializer_class = ComplaintStatusReadSerializer
     def getObject(self, id):
-        try:
-            return ComplaintStatus.objects.get(pk=id)
-        except ComplaintStatus.DoesNotExist:
-            return Response(status=status.HTTP_404_NOT_FOUND)
+        return get_object_or_404(ComplaintStatus, pk=id)
         
     def get(self, request, id, format=None):
             complaint_status = self.getObject(id)

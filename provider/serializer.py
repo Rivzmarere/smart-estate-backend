@@ -1,8 +1,11 @@
-from dataclasses import fields
 from rest_framework import serializers
+
+from authentication.serializer import UserSummarySerializer
 from .models import Provider
 
 class ProviderReadSerializer(serializers.ModelSerializer):
+    authorized_by = UserSummarySerializer(read_only=True)
+
     class Meta:
         model = Provider
         fields = '__all__'
@@ -13,3 +16,11 @@ class ProviderWriteSerializer(serializers.ModelSerializer):
         model = Provider
         fields = '__all__'
         
+
+class ProviderPublicSerializer(serializers.ModelSerializer):
+    """What the resident portal may see: no ID numbers, no staff details."""
+
+    class Meta:
+        model = Provider
+        fields = ["id", "name", "surname", "address", "phone_number1", "phone_number2", "provider_category", "status"]
+        depth = 1

@@ -1,13 +1,21 @@
 import math
+
+from django.utils import timezone
 from .models import Visit
 from .serializer import VisitBookOutSerializer, VisitBookinSerializer, VisitReadSerializer, VisitWriteSerializer
 from rest_framework.generics import GenericAPIView
 from rest_framework.response import Response
 from rest_framework import status
 from .utilities import random_numbers,search_auth,search_home
+from django.shortcuts import get_object_or_404
+from smartEstateBackend.permissions import IsAdminOrGuard, PublicCreateStaffRead
+from rest_framework.throttling import ScopedRateThrottle
 # Create your views here.
 
 class VisitList(GenericAPIView):
+    permission_classes = [PublicCreateStaffRead]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "public_booking"
     serializer_class = VisitReadSerializer
     def get(self, request, format=None):
             visits = Visit.objects.all()
@@ -34,6 +42,7 @@ class VisitList(GenericAPIView):
             return Response(status=status.HTTP_400_BAD_REQUEST)
 
 class VisitPaginated(GenericAPIView):
+    permission_classes = [IsAdminOrGuard]
     serializer_class = VisitReadSerializer
     def get(self, request, format=None):
         sort = 'asc'
@@ -73,12 +82,10 @@ class VisitPaginated(GenericAPIView):
 
 
 class VisitDetails(GenericAPIView):
+    permission_classes = [IsAdminOrGuard]
     serializer_class = VisitReadSerializer
     def getObject(self, id):
-        try:
-            return Visit.objects.get(pk=id)
-        except Visit.DoesNotExist:
-            return Response(status=status.HTTP_404_NOT_FOUND)
+        return get_object_or_404(Visit, pk=id)
         
     def get(self, request, id, format=None):
             visit = self.getObject(id)
@@ -101,36 +108,35 @@ class VisitDetails(GenericAPIView):
 
 
 class VisitBookInUpdateDetails(GenericAPIView):
+    permission_classes = [IsAdminOrGuard]
     serializer_class = VisitReadSerializer
     def getObject(self, id):
-        try:
-            return Visit.objects.get(pk=id)
-        except Visit.DoesNotExist:
-            return Response(status=status.HTTP_404_NOT_FOUND)
+        return get_object_or_404(Visit, pk=id)
         
     def put(self, request, id, format=None):
             visit = self.getObject(id)
             serializer = VisitBookinSerializer(visit, data=request.data)
             if serializer.is_valid():
-                serializer.save()
+                serializer.save(
+                    authorized_by=request.user,
+                    date_arrived=serializer.validated_data.get("date_arrived") or timezone.now(),
+                )
                 return Response(serializer.data, status=status.HTTP_201_CREATED)
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         
 
 
 class VisitBookOutUpdateDetails(GenericAPIView):
+    permission_classes = [IsAdminOrGuard]
     serializer_class = VisitReadSerializer
     def getObject(self, id):
-        try:
-            return Visit.objects.get(pk=id)
-        except Visit.DoesNotExist:
-            return Response(status=status.HTTP_404_NOT_FOUND)
+        return get_object_or_404(Visit, pk=id)
         
     def put(self, request, id, format=None):
             visit = self.getObject(id)
             serializer = VisitBookOutSerializer(visit, data=request.data)
             if serializer.is_valid():
-                serializer.save(status=False)
+                serializer.save(status=False, date_depature=timezone.now())
                 return Response(serializer.data, status=status.HTTP_201_CREATED)
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         

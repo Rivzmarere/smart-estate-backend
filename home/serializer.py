@@ -1,8 +1,11 @@
-from dataclasses import fields
 from rest_framework import serializers
+
+from authentication.serializer import UserSummarySerializer
 from .models import Home
 
 class HomeReadSerializer(serializers.ModelSerializer):
+    authorized_by = UserSummarySerializer(read_only=True)
+
     class Meta:
         model = Home
         fields = '__all__'

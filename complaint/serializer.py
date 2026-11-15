@@ -1,8 +1,11 @@
-from dataclasses import fields
 from rest_framework import serializers
+
+from authentication.serializer import UserSummarySerializer
 from .models import Complain
 
 class ComplainReadSerializer(serializers.ModelSerializer):
+    assigned_to = UserSummarySerializer(read_only=True)
+
     class Meta:
         model = Complain
         fields = '__all__'

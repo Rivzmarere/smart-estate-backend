@@ -13,7 +13,11 @@ from rest_framework.throttling import ScopedRateThrottle
 from .serializer import ChangePasswordSerializer, SignUpSerializer,ReadUserSerializer,UpdateUserSerializer
 
 from django.shortcuts import get_object_or_404
-from smartEstateBackend.permissions import IsAdminRole, is_admin
+from datetime import timedelta
+
+from smartEstateBackend.permissions import ROLE_GUARD, IsAdminRole, is_admin
+
+GUARD_SESSION = timedelta(hours=12)
 class SignUpView(GenericAPIView):
     """Create a staff account. Only administrators can create users."""
     permission_classes = [IsAdminRole]
@@ -77,13 +81,22 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
     @classmethod
     def get_token(cls, user):
         token = super().get_token(user)
-
-        # Add custom claims
         token['role'] = user.role
         token['email'] = user.email
-        # ...
-
         return token
+
+    def validate(self, attrs):
+        data = super().validate(attrs)
+        # Guards stay logged in for a whole 12-hour shift so the gate tablet keeps syncing.
+        if self.user.role == ROLE_GUARD:
+            refresh = self.get_token(self.user)
+            access = refresh.access_token
+            access.set_exp(lifetime=GUARD_SESSION)
+            refresh.set_exp(lifetime=GUARD_SESSION)
+            data["refresh"], data["access"] = str(refresh), str(access)
+        return data
+
+
 class MyTokenObtainPairView(TokenObtainPairView):
     serializer_class = MyTokenObtainPairSerializer
     permission_classes = [AllowAny]

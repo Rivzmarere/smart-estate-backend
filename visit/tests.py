@@ -249,3 +249,17 @@ class GateScreenTests(EstateFixture):
         Visit.objects.filter(id=self.visit.id).update(status=False)
         response = self.client.post(f"/gate/visits/{self.visit.id}/book-in", {"visitor_national_id": "63-222222D22"})
         self.assertEqual(response.status_code, 409)
+
+
+class LoginLifetimeTests(EstateFixture):
+    def lifetime_hours(self, username):
+        import jwt  # bundled with simplejwt (PyJWT)
+        token = self.client.post("/token", {"username": username, "password": "S3cure-pass!"}).data["access"]
+        claims = jwt.decode(token, options={"verify_signature": False})
+        return (claims["exp"] - claims["iat"]) / 3600
+
+    def test_guard_session_lasts_a_shift(self):
+        self.assertAlmostEqual(self.lifetime_hours("guard1"), 12, delta=0.01)
+
+    def test_admin_session_stays_short(self):
+        self.assertAlmostEqual(self.lifetime_hours("admin1"), 2, delta=0.01)

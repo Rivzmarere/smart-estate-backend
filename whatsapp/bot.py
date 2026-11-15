@@ -17,6 +17,8 @@ from django.core.files.base import ContentFile
 from django.db.models import Q
 from django.utils import timezone
 
+from assist import services as assist
+from assist.models import EmergencyAlert
 from complaint.models import Complain, ComplaintPhoto
 from estates.context import use_estate
 from gatepass import services as walk_ins
@@ -29,6 +31,8 @@ from notice.models import Notice
 from home.models import Home
 from parameters.models.models_complaint_category import ComplaintCategory
 from parameters.models.models_complaint_status import ComplaintStatus
+from parameters.models.models_provider_category import ProviderCategory
+from provider.models import Provider
 from parameters.models.models_transport_type import TransportType
 from parameters.models.models_visit_status import VisitStatus
 from resident.models import Resident
@@ -53,12 +57,20 @@ LEVY_CHOICE = "levy_choice"
 LEVY_AMOUNT = "levy_amount"
 LEVY_CURRENCY = "levy_currency"
 LEVY_PHONE = "levy_phone"
+EMERGENCY_KIND = "emergency_kind"
+EMERGENCY_DETAILS = "emergency_details"
+PROVIDER_CATEGORY = "provider_category"
+HANDOFF = assist.HANDOFF_STATE
 
 # A half-finished conversation older than this starts again from the menu.
 SESSION_TIMEOUT = timedelta(minutes=30)
+# A chat with the office stays with the office for a day.
+HANDOFF_TIMEOUT = timedelta(hours=24)
 
 RESET_WORDS = {"hi", "hello", "menu", "start", "0", "home", "cancel", "stop", "mhoro", "sawubona"}
 SKIP_WORDS = {"skip", "no", "none", "-"}
+EMERGENCY_WORDS = {"sos", "emergency", "help me"}
+HANDOFF_EXIT_WORDS = {"menu", "cancel", "stop", "bot"}
 
 MAX_NAME_LENGTH = 60
 MAX_DESCRIPTION_LENGTH = 1000
@@ -128,7 +140,8 @@ def handle_message(wa_id, message):
 def _handle_message(wa_id, message, home):
     session, _ = WhatsAppSession.objects.get_or_create(wa_id=wa_id)
     now = timezone.now()
-    if session.state != MENU and session.updated_at and now - session.updated_at > SESSION_TIMEOUT:
+    timeout = HANDOFF_TIMEOUT if session.state == HANDOFF else SESSION_TIMEOUT
+    if session.state != MENU and session.updated_at and now - session.updated_at > timeout:
         session.state, session.data = MENU, {}
     session.last_inbound_at = now
 
@@ -154,6 +167,9 @@ def _handle_message(wa_id, message, home):
         choice = message.get("button", {}).get("payload")
     elif kind == "image":
         session.save()
+        if session.state == HANDOFF:
+            client.send_text(session.wa_id, "I can only pass written messages to the office for now. Please describe it in words.")
+            return
         return handle_image(session, home, message.get("image", {}))
     else:
         client.send_text(wa_id, "Sorry, I can only read text and menu choices for now.")
@@ -166,9 +182,21 @@ def _handle_message(wa_id, message, home):
         session.save()
         return answer_walk_in(session, home, choice)
 
-    if text.lower() in RESET_WORDS:
+    lowered = text.lower()
+    if lowered in EMERGENCY_WORDS:
+        return start_emergency(session, home)
+
+    # Talking to the office: everything goes to the office until they say "menu".
+    if session.state == HANDOFF and not choice:
+        if lowered in HANDOFF_EXIT_WORDS:
+            return show_menu(session, home, intro="You're back with the Smart Estate assistant. The office can still reply to you here.")
+        return handle_handoff(session, home, text)
+
+    if lowered in RESET_WORDS:
         show_menu(session, home)
         return
+    if lowered == "office":
+        return start_handoff(session, home)
 
     handler = STATE_HANDLERS.get(session.state, handle_menu)
     handler(session, home, text, choice)
@@ -191,7 +219,10 @@ def show_menu(session, home, intro=None):
             ("levy", "Pay levy", "See your balance and pay with EcoCash or OneMoney"),
             ("repair", "Report a repair", "Log a fault or complaint with the estate"),
             ("repairs", "My repairs", "Progress on repairs you reported"),
+            ("providers", "Service providers", "Plumbers, electricians and others the estate uses"),
             ("notices", "Estate notices", "Latest news from the estate office"),
+            ("office", "Talk to the office", "Chat with a person at the estate office"),
+            ("emergency", "🚨 Emergency", "Alert estate security now"),
             ("help", "Help", "How this works"),
         ],
         section_title="Smart Estate",
@@ -209,6 +240,12 @@ def handle_menu(session, home, text, choice):
         return show_repairs(session, home)
     if choice == "levy":
         return show_levy(session, home)
+    if choice == "providers":
+        return show_provider_categories(session, home)
+    if choice == "office":
+        return start_handoff(session, home)
+    if choice == "emergency":
+        return start_emergency(session, home)
     if choice == "notices":
         return show_notices(session, home)
     if choice == "help":
@@ -219,6 +256,8 @@ def handle_menu(session, home, text, choice):
             "• My visitors: see who is expected and cancel a booking.\n"
             "• Pay levy: see what you owe and pay from your EcoCash or OneMoney wallet; the receipt comes here.\n"
             "• Report a repair: the estate office is notified, and you can send photos. I'll tell you when the status changes.\n"
+            "• Talk to the office: chat with a person at the estate office.\n"
+            "• Emergency: type *SOS* at any time to alert estate security.\n"
             "Type *menu* at any time to start again.",
         )
         return show_menu(session, home, intro="Anything else?")
@@ -670,6 +709,123 @@ def handle_levy_phone(session, home, text, choice):
     client.send_text(session.wa_id, message)
 
 
+# ---------------------------------------------------------------- emergencies
+
+def start_emergency(session, home):
+    session.state, session.data = EMERGENCY_KIND, {}
+    session.save()
+    client.send_list(
+        session.wa_id,
+        "🚨 What is the emergency? Estate security will be alerted straight away with your address.",
+        "Choose",
+        [
+            ("em_security", "Security / intruder", None),
+            ("em_medical", "Medical", None),
+            ("em_fire", "Fire", None),
+            ("em_other", "Other emergency", None),
+            ("em_cancel", "Cancel, no emergency", None),
+        ],
+        section_title="Emergency",
+    )
+
+
+def handle_emergency_kind(session, home, text, choice):
+    kinds = {f"em_{k}": k for k, _ in EmergencyAlert.KINDS}
+    if choice == "em_cancel":
+        return show_menu(session, home, intro="No alert was sent. What would you like to do?")
+    kind = kinds.get(choice)
+    if kind is None:
+        if text:  # typed instead of tapping: treat as "other" so help is never delayed
+            kind = EmergencyAlert.OTHER
+        else:
+            client.send_text(session.wa_id, "Please choose the type of emergency from the list.")
+            return
+    alert, created = assist.raise_emergency(home, session.wa_id, kind)
+    if text:
+        assist.add_emergency_details(alert, text)
+    session.state, session.data = EMERGENCY_DETAILS, {"alert_id": alert.id}
+    session.save()
+    when = timezone.localtime(alert.created_at).strftime("%H:%M")
+    first = f"🚨 Alert sent to estate security at {when}. They have your address: {home.address}." if created else (
+        f"🚨 Security already has your alert from {when}. I've added this to it."
+    )
+    office = f"\nEstate office: {home.estate.office_phone}" if home.estate.office_phone else ""
+    client.send_text(
+        session.wa_id,
+        f"{first}\n\nIf a life is in danger, also call: {assist.NATIONAL_NUMBERS}.{office}\n\n"
+        "Reply with any details (what is happening, where exactly) and I'll pass them on.",
+    )
+
+
+def handle_emergency_details(session, home, text, choice):
+    if choice:
+        return handle_menu(session, home, text, choice)
+    alert = EmergencyAlert.objects.filter(id=session.data.get("alert_id"), home=home).first()
+    if alert is None or not text:
+        return show_menu(session, home)
+    assist.add_emergency_details(alert, text)
+    client.send_text(session.wa_id, "Passed on to security. Send more details any time, or type *menu* when you're done.")
+
+
+# ---------------------------------------------------------------- service providers
+
+def show_provider_categories(session, home):
+    used = Provider.objects.filter(status=True).values_list("provider_category_id", flat=True)
+    categories = list(ProviderCategory.objects.filter(id__in=used, status=True).order_by("name")[:9])
+    if not categories:
+        return show_menu(session, home, intro="The estate has not listed any service providers yet. What would you like to do?")
+    session.state, session.data = PROVIDER_CATEGORY, {}
+    session.save()
+    rows = [(f"pc_{c.id}", c.name, None) for c in categories] + [("back", "Back to menu", None)]
+    client.send_list(session.wa_id, "Service providers the estate uses. Which do you need?", "Choose", rows, section_title="Categories")
+
+
+def handle_provider_category(session, home, text, choice):
+    if choice == "back" or not (choice or "").startswith("pc_"):
+        return show_menu(session, home)
+    category = ProviderCategory.objects.filter(id=choice[3:]).first()
+    providers = list(Provider.objects.filter(provider_category=category, status=True).order_by("name")[:10]) if category else []
+    if not providers:
+        return show_menu(session, home, intro="No one is listed in that category. What would you like to do?")
+    lines = [f"*{category.name}*"]
+    for p in providers:
+        phones = " / ".join(n for n in (p.phone_number1, p.phone_number2) if n)
+        lines.append(f"• {p.name} {p.surname}: {phones}")
+    lines.append("\nThese are independent businesses; agree the price before work starts.")
+    client.send_text(session.wa_id, "\n".join(lines))
+    show_menu(session, home, intro="Anything else?")
+
+
+# ---------------------------------------------------------------- office hand-off
+
+def start_handoff(session, home):
+    conversation, created = assist.open_conversation(home, session.wa_id)
+    session.state, session.data = HANDOFF, {"conversation_id": conversation.id}
+    session.save()
+    hours = f" Office hours: {home.estate.office_hours}." if home.estate.office_hours else ""
+    client.send_text(
+        session.wa_id,
+        f"You're now writing to the {home.estate.name} office.{hours} Type your message and a person will reply here.\n"
+        "Type *menu* to go back to the assistant.",
+    )
+
+
+def handle_handoff(session, home, text):
+    if not text:
+        return
+    from assist.models import Conversation
+
+    conversation = Conversation.objects.filter(id=session.data.get("conversation_id"), home=home, status=Conversation.OPEN).first()
+    if conversation is None:
+        conversation, _ = assist.open_conversation(home, session.wa_id)
+        session.data = {"conversation_id": conversation.id}
+    first_message = not conversation.messages.exists()
+    assist.record_resident_message(conversation, text)
+    session.save()
+    if first_message:
+        client.send_text(session.wa_id, "Thanks, the office has your message and will reply here.")
+
+
 STATE_HANDLERS = {
     MENU: handle_menu,
     BOOK_NAME: handle_book_name,
@@ -684,4 +840,7 @@ STATE_HANDLERS = {
     LEVY_AMOUNT: handle_levy_amount,
     LEVY_CURRENCY: handle_levy_currency,
     LEVY_PHONE: handle_levy_phone,
+    EMERGENCY_KIND: handle_emergency_kind,
+    EMERGENCY_DETAILS: handle_emergency_details,
+    PROVIDER_CATEGORY: handle_provider_category,
 }

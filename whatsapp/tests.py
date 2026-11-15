@@ -130,7 +130,7 @@ class WhatsAppBotTests(BotCase):
     def test_greeting_shows_menu_with_address(self):
         reply = self.text(RESIDENT_A, "Hi")
         self.assertIn("101 Msasa Close", self.body(reply))
-        self.assertEqual(self.choice_ids(reply), ["book", "visitors", "levy", "repair", "repairs", "notices", "help"])
+        self.assertEqual(self.choice_ids(reply), ["book", "visitors", "levy", "repair", "repairs", "providers", "notices", "office", "emergency", "help"])
 
     # -- booking ---------------------------------------------------------
     def test_book_visitor_by_car(self):

@@ -35,4 +35,5 @@ urlpatterns = [
     path('', include('reports.url')),
     path('', include('levy.url')),
     path('', include('gatepass.url')),
+    path('', include('assist.url')),
 ]

@@ -22,10 +22,10 @@ class Estate(models.Model):
     active = models.BooleanField(default=True)
     address = models.CharField(max_length=200, blank=True)
     # Who residents and the system reach
-    office_phone = models.CharField(max_length=20, blank=True, help_text="Shown to residents; office hand-off alerts go here")
+    office_phone = models.CharField(max_length=20, blank=True, help_text="Shown to residents. A mobile number also gets an SMS when a resident asks to chat.")
     office_hours = models.CharField(max_length=120, blank=True, help_text="e.g. Mon-Fri 08:00-16:30")
     emergency_phones = models.CharField(
-        max_length=200, blank=True, help_text="Comma-separated numbers SMSed when a resident raises an emergency (security control room, manager)"
+        max_length=200, blank=True, help_text="Comma-separated mobile numbers SMSed when a resident raises an emergency (security control room, manager)"
     )
     # Paynow (blank = use the server-wide settings)
     paynow_usd_integration_id = models.CharField(max_length=20, blank=True)

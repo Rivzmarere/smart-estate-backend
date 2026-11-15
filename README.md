@@ -114,3 +114,41 @@ templates. Submit these (category "Utility") and put their names in `.env`:
 | `WHATSAPP_TEMPLATE_WALK_IN` | {{1}} is at the gate asking to visit you. Let them in? | Quick reply: Approve, Decline |
 | `WHATSAPP_TEMPLATE_PAYMENT_RECEIPT` | Smart Estate receipt {{1}}: {{2}} received for {{3}}. Balance now {{4}}. | none |
 | `WHATSAPP_TEMPLATE_REPAIR_UPDATE` | Your repair {{1}} ({{2}}) is now: {{3}}. | none |
+
+## Several estates on one installation
+
+Each estate's data is kept apart automatically: every estate-owned model
+inherits `estates.models.EstateScoped`, whose default manager only returns
+the *current estate's* rows, and new rows are stamped with that estate.
+The current estate is:
+
+- for staff: the estate on their account;
+- for platform staff (a superuser with no estate): every estate, or the
+  one named in the `X-Estate` header;
+- for the resident portal: the `X-Estate` header or `?estate=<slug>`;
+- with only one active estate: that estate (nothing to configure).
+
+Code that runs outside a request (the WhatsApp webhook, Paynow callbacks,
+management commands) works inside `estates.context.use_estate(estate)`.
+Use `Model.all_estates` only where looking across estates is intended.
+
+On first install the existing data is put in an estate named
+`DEFAULT_ESTATE_NAME` (slug `DEFAULT_ESTATE_SLUG`). To add an estate, a
+platform user (`python manage.py createsuperuser`, no estate) uses
+`POST /estates` and then `POST /estates/<id>/admin` for its first
+administrator. Each estate can have its own Paynow account (Estate
+settings); otherwise the server-wide `PAYNOW_*` settings are used.
+
+## Emergencies, service providers and the office inbox
+
+- **Emergency**: residents tap *🚨 Emergency* or type *SOS*. The alert is
+  SMSed to the estate's emergency numbers (Estate settings), shown on the
+  gate screen, and the resident gets the national emergency numbers.
+  Guards acknowledge and resolve it; the resident is told each time.
+- **Service providers**: residents see the estate's active providers by
+  category (names and phone numbers only).
+- **Talk to the office**: the resident's messages go to the back-office
+  Inbox until they type *menu*. Replies go out on WhatsApp; after 24 hours
+  of silence from the resident that needs the
+  `WHATSAPP_TEMPLATE_OFFICE_MESSAGE` template, otherwise the office is
+  told to phone them.

@@ -148,6 +148,14 @@ class AdminApiTests(LevyFixture):
         self.assertEqual([e["kind"] for e in statement["statement"]], ["invoice", "payment"])
         self.assertEqual(Decimal(statement["statement"][-1]["balance"]), Decimal("30.00"))
 
+    def test_rate_for_the_same_day_is_corrected_not_duplicated(self):
+        self.client.force_authenticate(self.admin)
+        first = self.client.post("/levies/rates", {"effective_from": "2026-11-15", "zig_per_usd": "2.68"}, format="json")
+        self.assertEqual(first.status_code, 201)
+        fixed = self.client.post("/levies/rates", {"effective_from": "2026-11-15", "zig_per_usd": "26.80"}, format="json")
+        self.assertEqual(fixed.status_code, 200)
+        self.assertEqual(ExchangeRate.objects.get().zig_per_usd, Decimal("26.80"))
+
     def test_void_invoice(self):
         invoice = self.invoice(self.home_a, "45.00", self.today)
         self.client.force_authenticate(self.admin)

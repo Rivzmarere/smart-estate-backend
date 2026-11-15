@@ -10,6 +10,7 @@ class ExchangeRateSerializer(serializers.ModelSerializer):
     class Meta:
         model = ExchangeRate
         fields = ["id", "effective_from", "zig_per_usd", "note", "created_at"]
+        extra_kwargs = {"effective_from": {"validators": []}}  # the view updates an existing day instead
 
     def validate_zig_per_usd(self, value):
         if value <= 0:

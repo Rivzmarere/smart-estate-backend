@@ -79,6 +79,18 @@ class WalkInTests(BotCase):
         self.tap(RESIDENT_B, f"walkin_yes_{data['id']}")
         self.assertEqual(WalkInRequest.objects.get().status, "pending")
 
+    def test_resident_with_two_homes_can_answer_for_either(self):
+        from home.models import Home
+        from stand.models import Stand
+
+        first = Home.objects.get(stand__stand_number=101)
+        stand = Stand.objects.create(stand_number=103, stand_status=first.stand.stand_status, authorized_by=self.admin)
+        Home.objects.create(owner=first.owner, stand=stand, address="103 Msasa Close", resident=self.resident_a,
+                            home_status=first.home_status, authorized_by=self.admin)
+        data = self.ask(stand=103).json()
+        self.tap(RESIDENT_A, f"walkin_yes_{data['id']}")
+        self.assertEqual(WalkInRequest.objects.get().status, "approved")
+
     def test_requests_expire(self):
         data = self.ask().json()
         WalkInRequest.objects.filter(pk=data["id"]).update(created_at=timezone.now() - datetime.timedelta(minutes=11))

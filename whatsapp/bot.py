@@ -69,21 +69,21 @@ MAX_PAYMENT = Decimal("10000.00")
 
 # ---------------------------------------------------------------- lookups
 
-def find_home(wa_id):
-    """The active home whose resident owns this WhatsApp number, or None."""
+def find_homes(wa_id):
+    """Active homes whose resident owns this WhatsApp number (a person may have more than one)."""
     variants = phone_variants(wa_id)
     if not variants:
-        return None
+        return Home.objects.none()
     phone_match = Q()
     for field in ("phone_number1", "phone_number2", "phone_number3", "phone_number4"):
         phone_match |= Q(**{f"{field}__in": variants})
     residents = Resident.objects.filter(phone_match, status=True)
-    return (
-        Home.objects.filter(resident__in=residents, status=True)
-        .select_related("resident", "stand")
-        .order_by("id")
-        .first()
-    )
+    return Home.objects.filter(resident__in=residents, status=True).select_related("resident", "stand").order_by("id")
+
+
+def find_home(wa_id):
+    """The home the bot works with for this number (the first, if there are several), or None."""
+    return find_homes(wa_id).first()
 
 
 def local_phone(wa_id):
@@ -498,7 +498,7 @@ def show_repairs(session, home):
 def answer_walk_in(session, home, choice):
     approve = choice.startswith(walk_ins.APPROVE_PREFIX)
     raw_id = choice.removeprefix(walk_ins.APPROVE_PREFIX if approve else walk_ins.DECLINE_PREFIX)
-    request = WalkInRequest.objects.filter(id=raw_id if raw_id.isdigit() else 0, home=home).first()
+    request = WalkInRequest.objects.filter(id=raw_id if raw_id.isdigit() else 0, home__in=find_homes(session.wa_id)).first()
     if request is None:
         client.send_text(session.wa_id, "I couldn't find that gate request.")
         return

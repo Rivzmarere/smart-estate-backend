@@ -23,13 +23,21 @@ logger = logging.getLogger(__name__)
 
 
 class ExchangeRates(generics.ListCreateAPIView):
+    """POST for a day that already has a rate replaces it (to correct a typo)."""
+
     permission_classes = [IsAdminRole]
     serializer_class = ExchangeRateSerializer
     pagination_class = None
-    queryset = ExchangeRate.objects.all()[:100]
 
-    def perform_create(self, serializer):
-        serializer.save(created_by=self.request.user)
+    def get_queryset(self):
+        return ExchangeRate.objects.all()[:100]
+
+    def create(self, request, *args, **kwargs):
+        existing = ExchangeRate.objects.filter(effective_from=request.data.get("effective_from")).first() if request.data.get("effective_from") else None
+        serializer = self.get_serializer(existing, data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save(created_by=request.user)
+        return Response(serializer.data, status=200 if existing else 201)
 
 
 class Invoices(generics.ListCreateAPIView):

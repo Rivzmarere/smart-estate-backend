@@ -1,9 +1,10 @@
+from smartEstateBackend.audit import StampAuthorizedBy
 from rest_framework import serializers
 
 from authentication.serializer import UserSummarySerializer
 from .models import Provider
 
-class ProviderReadSerializer(serializers.ModelSerializer):
+class ProviderReadSerializer(StampAuthorizedBy, serializers.ModelSerializer):
     authorized_by = UserSummarySerializer(read_only=True)
 
     class Meta:
@@ -11,13 +12,13 @@ class ProviderReadSerializer(serializers.ModelSerializer):
         fields = '__all__'
         depth = 1
 
-class ProviderWriteSerializer(serializers.ModelSerializer):
+class ProviderWriteSerializer(StampAuthorizedBy, serializers.ModelSerializer):
     class Meta:
         model = Provider
         fields = '__all__'
         
 
-class ProviderPublicSerializer(serializers.ModelSerializer):
+class ProviderPublicSerializer(StampAuthorizedBy, serializers.ModelSerializer):
     """What the resident portal may see: no ID numbers, no staff details."""
 
     class Meta:

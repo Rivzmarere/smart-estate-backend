@@ -263,3 +263,26 @@ class LoginLifetimeTests(EstateFixture):
 
     def test_admin_session_stays_short(self):
         self.assertAlmostEqual(self.lifetime_hours("admin1"), 2, delta=0.01)
+
+
+class ThrottleBehindProxyTests(EstateFixture):
+    """Behind Caddy every request comes from the same address; limits must use the client's."""
+
+    def test_login_limit_is_per_client_not_shared(self):
+        from django.conf import settings
+        from django.test import override_settings
+        from rest_framework.settings import api_settings
+
+        with override_settings(REST_FRAMEWORK={**settings.REST_FRAMEWORK, "NUM_PROXIES": 1}):
+            api_settings.reload()
+            try:
+                bad = {"username": "admin1", "password": "wrong"}
+                for _ in range(10):
+                    self.client.post("/token", bad, format="json", REMOTE_ADDR="172.18.0.5", HTTP_X_FORWARDED_FOR="41.57.1.1")
+                blocked = self.client.post("/token", bad, format="json", REMOTE_ADDR="172.18.0.5", HTTP_X_FORWARDED_FOR="41.57.1.1")
+                self.assertEqual(blocked.status_code, 429)
+                other = self.client.post("/token", {"username": "admin1", "password": "S3cure-pass!"}, format="json",
+                                         REMOTE_ADDR="172.18.0.5", HTTP_X_FORWARDED_FOR="77.246.2.2")
+                self.assertEqual(other.status_code, 200)
+            finally:
+                api_settings.reload()

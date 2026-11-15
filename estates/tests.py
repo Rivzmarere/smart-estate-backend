@@ -89,6 +89,21 @@ class IsolationTests(TwoEstates):
         self.client.post("/stand", {"stand_number": 306, "stand_status": status_id, "authorized_by": self.admin.id, "estate": self.estate_b.id}, format="json")
         self.assertEqual(Stand.all_estates.get(stand_number=306).estate, self.estate_a)
 
+    def test_who_did_it_comes_from_the_login(self):
+        self.client.force_authenticate(self.admin_b)
+        status_id = self.home_b.stand.stand_status_id
+        # The old screens send authorized_by=1; it must be ignored.
+        self.client.post("/stand", {"stand_number": 407, "stand_status": status_id, "authorized_by": self.admin.id}, format="json")
+        self.assertEqual(Stand.all_estates.get(stand_number=407).authorized_by, self.admin_b)
+
+    def test_shared_lists_need_platform_staff_once_there_are_two_estates(self):
+        self.client.force_authenticate(self.admin)
+        self.assertEqual(self.client.get("/parameters/gender").status_code, 200)
+        self.assertEqual(self.client.post("/parameters/gender", {"name": "Other"}, format="json").status_code, 403)
+        platform = User.objects.create_superuser(username="platform2", password="S3cure-pass!", role="Admin")
+        self.client.force_authenticate(platform)
+        self.assertIn(self.client.post("/parameters/gender", {"name": "Other"}, format="json").status_code, (200, 201))
+
     def test_new_records_belong_to_the_creators_estate(self):
         self.client.force_authenticate(self.admin_b)
         status_id = self.home_b.stand.stand_status_id

@@ -99,17 +99,20 @@ CSRF_TRUSTED_ORIGINS = env_list("CSRF_TRUSTED_ORIGINS")
 
 REST_FRAMEWORK = {
     "NON_FIELD_ERRORS_KEY": "errors",
-    "DEFAULT_AUTHENTICATION_CLASSES": (
-        "rest_framework_simplejwt.authentication.JWTAuthentication",
-        "rest_framework.authentication.TokenAuthentication",
-    ),
+    # Short-lived JWTs only (the old never-expiring DRF tokens are no longer accepted).
+    "DEFAULT_AUTHENTICATION_CLASSES": ("rest_framework_simplejwt.authentication.JWTAuthentication",),
     # Every endpoint requires login unless a view explicitly opts out.
     "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticated",),
     "DEFAULT_THROTTLE_RATES": {
         "anon": "60/hour",
-        "public_booking": "20/hour",
+        # Per client address. Mobile networks put many people behind one address.
+        "public_booking": "60/hour",
         "login": "10/minute",
     },
+    # Requests arrive through one proxy (Caddy), which sets X-Forwarded-For to
+    # the real client address; without this every visitor would share Caddy's
+    # address and one person could use up everyone's login attempts.
+    "NUM_PROXIES": int(os.environ.get("NUM_PROXIES", "0" if DEBUG else "1")),
 }
 
 SIMPLE_JWT = {

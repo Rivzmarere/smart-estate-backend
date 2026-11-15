@@ -64,3 +64,23 @@ class PublicCreateStaffRead(BasePermission):
         if request.method == "POST":
             return True
         return is_staff_member(request.user)
+
+
+class SharedListPermission(BasePermission):
+    """
+    Reference lists (genders, statuses, categories, transport types) are shared
+    by every estate. Anyone may read them; with several estates only platform
+    staff may change them, so one estate cannot alter another's options.
+    """
+
+    message = "These lists are shared by all estates; ask Smart Estate support to change them."
+
+    def has_permission(self, request, view):
+        if request.method in SAFE_METHODS:
+            return True
+        if not is_admin(request.user):
+            return False
+        from estates.models import Estate
+
+        platform = request.user.is_superuser and not getattr(request.user, "estate_id", None)
+        return platform or Estate.objects.count() <= 1

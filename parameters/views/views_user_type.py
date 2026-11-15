@@ -5,11 +5,11 @@ from rest_framework.generics import GenericAPIView
 from rest_framework.response import Response
 from rest_framework import status
 from django.shortcuts import get_object_or_404
-from smartEstateBackend.permissions import PublicReadAdminWrite
+from smartEstateBackend.permissions import SharedListPermission
 # Create your views here.
 
 class UserTypeList(GenericAPIView):
-    permission_classes = [PublicReadAdminWrite]
+    permission_classes = [SharedListPermission]
     serializer_class = UserTypeReadSerializer
     def get(self, request, format=None):
             user_type = UserType.objects.all()
@@ -24,7 +24,7 @@ class UserTypeList(GenericAPIView):
             return Response(status=status.HTTP_400_BAD_REQUEST)
 
 class UserTypePaginated(GenericAPIView):
-    permission_classes = [PublicReadAdminWrite]
+    permission_classes = [SharedListPermission]
     serializer_class = UserTypeReadSerializer
     def get(self, request, format=None):
         sort = 'asc'
@@ -58,7 +58,7 @@ class UserTypePaginated(GenericAPIView):
 
 
 class UserTypeDetails(GenericAPIView):
-    permission_classes = [PublicReadAdminWrite]
+    permission_classes = [SharedListPermission]
     serializer_class = UserTypeReadSerializer
     def getObject(self, id):
         return get_object_or_404(UserType, pk=id)

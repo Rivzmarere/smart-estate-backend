@@ -5,11 +5,11 @@ from rest_framework.generics import GenericAPIView
 from rest_framework.response import Response
 from rest_framework import status
 from django.shortcuts import get_object_or_404
-from smartEstateBackend.permissions import PublicReadAdminWrite
+from smartEstateBackend.permissions import SharedListPermission
 # Create your views here.
 
 class NationalityList(GenericAPIView):
-    permission_classes = [PublicReadAdminWrite]
+    permission_classes = [SharedListPermission]
     serializer_class = NationalityReadSerializer
     def get(self, request, format=None):
             nationality = Nationality.objects.all()
@@ -24,7 +24,7 @@ class NationalityList(GenericAPIView):
             return Response(status=status.HTTP_400_BAD_REQUEST)
 
 class NationalityPaginated(GenericAPIView):
-    permission_classes = [PublicReadAdminWrite]
+    permission_classes = [SharedListPermission]
     serializer_class = NationalityReadSerializer
     def get(self, request, format=None):
         sort = 'asc'
@@ -58,7 +58,7 @@ class NationalityPaginated(GenericAPIView):
 
 
 class NationalityDetails(GenericAPIView):
-    permission_classes = [PublicReadAdminWrite]
+    permission_classes = [SharedListPermission]
     serializer_class = NationalityReadSerializer
     def getObject(self, id):
         return get_object_or_404(Nationality, pk=id)

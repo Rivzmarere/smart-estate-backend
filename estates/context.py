@@ -95,3 +95,10 @@ class EstateMiddleware:
             return self.get_response(request)
         finally:
             reset_request(token)
+
+
+def current_user():
+    """The logged-in user of the current request, or None."""
+    request = _request.get()
+    user = getattr(request, "user", None) if request is not None else None
+    return user if user is not None and user.is_authenticated else None

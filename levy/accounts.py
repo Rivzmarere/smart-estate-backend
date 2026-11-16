@@ -39,15 +39,24 @@ def allocate(invoices, paid_total, today):
     return rows, money(arrears), money(max(remaining, ZERO))
 
 
-def account(home, today=None):
-    """Full account for one home."""
+def account(home, today=None, lease=None):
+    """
+    Full account for one home. A rented property's account is its current
+    tenant's (their lease), so one tenant never sees or owes another's rent.
+    """
     today = today or timezone.localdate()
-    invoices = list(Invoice.objects.filter(home=home, void=False))
-    paid = Payment.objects.filter(home=home, status=Payment.PAID).aggregate(total=Sum("amount_usd"))["total"] or ZERO
+    if lease is None:
+        from rentals.models import Lease
+
+        lease = Lease.objects.filter(home=home, status=Lease.ACTIVE).first()
+    scope = {"lease": lease} if lease else {"home": home}
+    invoices = list(Invoice.objects.filter(void=False, **scope))
+    paid = Payment.objects.filter(status=Payment.PAID, **scope).aggregate(total=Sum("amount_usd"))["total"] or ZERO
     invoiced = sum((i.amount_usd for i in invoices), ZERO)
     rows, arrears, credit = allocate(invoices, paid, today)
     return {
         "home": home,
+        "lease": lease,
         "invoiced": money(invoiced),
         "paid": money(paid),
         "balance": money(invoiced - paid),

@@ -38,7 +38,7 @@ def start_payment(home, amount_usd, currency, phone, wa_id=""):
         status=Payment.PENDING, channel=Payment.WHATSAPP, phone=phone, wa_id=wa_id,
     )
     try:
-        instructions = paynow.start_mobile_payment(payment, f"Levy {home.address}")
+        instructions = paynow.start_mobile_payment(payment, f"{home.estate.bill_word.capitalize()} {home.address}")
     except paynow.PaynowError as exc:
         payment.status = Payment.FAILED
         payment.failure_reason = str(exc)[:300]

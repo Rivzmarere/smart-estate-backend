@@ -105,10 +105,19 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
         token['email'] = user.email
         token['username'] = user.username
         token['name'] = user.get_full_name() or user.username
-        estate = user.estate or (None if user.is_superuser else Estate.objects.filter(active=True).first())
-        token['estate'] = estate.name if estate else "All estates"
+        organisation = user.organisation if user.spans_organisation else None
+        if user.estate_id:
+            estate = user.estate
+        elif user.is_superuser or organisation:
+            estate = None  # they choose an estate in the back office
+        else:
+            estate = Estate.objects.filter(active=True).first()
+        token['estate'] = estate.name if estate else (organisation.name if organisation else "All estates")
         token['estate_slug'] = estate.slug if estate else ""
+        token['estate_kind'] = estate.kind if estate else ""
         token['platform'] = bool(user.is_superuser and not user.estate_id)
+        token['organisation'] = organisation.name if organisation else ""
+        token['organisation_kind'] = organisation.kind if organisation else ""
         token['sandbox'] = bool(estate and estate.sandbox)
         return token
 
@@ -116,6 +125,8 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
         data = super().validate(attrs)
         if self.user.estate_id and not self.user.estate.active:
             raise AuthenticationFailed("This estate's account is switched off. Please contact Smart Estate.")
+        if self.user.organisation_id and not self.user.organisation.active:
+            raise AuthenticationFailed("This account is switched off. Please contact Smart Estate.")
         # Guards stay logged in for a whole 12-hour shift so the gate tablet keeps syncing.
         if self.user.role == ROLE_GUARD:
             refresh = self.get_token(self.user)

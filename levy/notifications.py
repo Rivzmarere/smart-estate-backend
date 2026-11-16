@@ -34,14 +34,14 @@ def receipt_text(payment, balance):
     elif balance < 0:
         lines.append(f"Credit on your account: {fmt_usd(-balance)}")
     else:
-        lines.append("Your levy account is fully paid. Thank you!")
+        lines.append(f"Your {payment.home.estate.bill_word} account is fully paid. Thank you!")
     return "\n".join(lines)
 
 
 def send_receipt(payment):
     """Send the receipt to whoever paid (WhatsApp) or the resident (SMS). Never raises."""
     try:
-        balance = account(payment.home)["balance"]
+        balance = account(payment.home, lease=payment.lease)["balance"]
         phone = payment.wa_id or payment.phone or (payment.home.resident.phone_number1 if payment.home.resident else "")
         if not phone:
             return False
@@ -69,6 +69,6 @@ def send_payment_failed(payment):
     reason = "you cancelled it" if payment.status == Payment.CANCELLED else "it did not go through"
     return notify(
         payment.wa_id,
-        f"Your levy payment of {amount_text(payment)} was not completed ({reason}). "
+        f"Your {payment.home.estate.bill_word} payment of {amount_text(payment)} was not completed ({reason}). "
         "Nothing was taken from your wallet. Type *menu* to try again.",
     )

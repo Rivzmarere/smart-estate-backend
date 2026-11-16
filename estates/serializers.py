@@ -13,11 +13,13 @@ class EstateSerializer(serializers.ModelSerializer):
     paynow_zwg_ready = serializers.SerializerMethodField()
     homes = serializers.SerializerMethodField()
     staff = serializers.SerializerMethodField()
+    organisation_name = serializers.CharField(source="organisation.name", read_only=True, default="")
 
     class Meta:
         model = Estate
         fields = [
-            "id", "name", "slug", "active", "sandbox", "address", "office_phone", "office_hours", "emergency_phones", "household_approval",
+            "id", "name", "slug", "active", "sandbox", "kind", "organisation", "organisation_name", "management_fee_percent",
+            "rent_reminders", "address", "office_phone", "office_hours", "emergency_phones", "household_approval",
             "paynow_usd_integration_id", "paynow_usd_integration_key", "paynow_zwg_integration_id",
             "paynow_zwg_integration_key", "paynow_auth_email", "paynow_usd_ready", "paynow_zwg_ready",
             "homes", "staff", "created_at",
@@ -50,7 +52,7 @@ class EstateSettingsSerializer(EstateSerializer):
     """What an estate's own administrator may change (not the slug or active flag)."""
 
     class Meta(EstateSerializer.Meta):
-        read_only_fields = ["slug", "active", "sandbox", "created_at"]
+        read_only_fields = ["slug", "active", "sandbox", "kind", "organisation", "created_at"]
 
 
 class FirstAdminSerializer(serializers.Serializer):

@@ -112,9 +112,155 @@ def create_tester(estate, role, label=""):
     return username, secret
 
 
+RENTALS = [
+    # address, monthly rent, months let so far (0 = vacant), months until the lease ends (None = month to month)
+    ("Flat 3, Baines Court, 12 Baines Avenue, Avenues", 450, 14, 10),
+    ("Flat 7, Baines Court, 12 Baines Avenue, Avenues", 450, 5, 7),
+    ("14 Quorn Avenue, Mount Pleasant", 900, 11, 1),
+    ("Cottage, 14 Quorn Avenue, Mount Pleasant", 350, 3, None),
+    ("22 Dunkirk Drive, Greendale", 650, 20, 4),
+    ("5 Chiremba Road, Hatfield", 400, 8, None),
+    ("Unit 2, 88 Kaguvi Street, CBD (shop)", 1200, 26, 22),
+    ("Unit 3, 88 Kaguvi Street, CBD (shop)", 1100, 0, None),
+    ("9 Glenara Avenue South, Eastlea", 500, 13, -1),
+    ("31 Harare Drive, Marlborough", 700, 6, 6),
+    ("Flat 1, Vale Court, Belvedere", 380, 2, 10),
+    ("Flat 4, Vale Court, Belvedere", 380, 0, None),
+]
+
+
+def _months_back(day, months):
+    for _ in range(months):
+        day = (day.replace(day=1) - datetime.timedelta(days=1)).replace(day=1)
+    return day.replace(day=1)
+
+
+def _months_ahead(day, months):
+    if months < 0:
+        return day - datetime.timedelta(days=20)
+    for _ in range(months):
+        day = (day.replace(day=1) + datetime.timedelta(days=32)).replace(day=1)
+    return day.replace(day=28)
+
+
+@transaction.atomic
+def seed_rental(estate, staff=None):
+    """A believable Harare rental portfolio: flats, houses and shops with tenants, leases, rent and costs."""
+    from rentals import services as rentals
+    from rentals.models import Expense, Lease
+
+    rng = random.Random(estate.pk)
+    gender = param(Gender, ["Female", "Male"])
+    zim = param(Nationality, ["Zimbabwean"])["Zimbabwean"]
+    stand_status = param(StandStatus, ["Occupied", "Vacant"])
+    home_status = param(HomeStatus, ["Rented", "Vacant"])
+    complaint_status = param(ComplaintStatus, ["Pending", "In progress", "Resolved"])
+    category = param(ComplaintCategory, ["Water & plumbing", "Electricity", "Security"])
+    provider_category = param(ProviderCategory, ["Plumbing", "Electrical", "Building"])
+    sex = {"F": gender["Female"], "M": gender["Male"]}
+    today = timezone.localdate()
+
+    with use_estate(estate):
+        estate.office_phone = estate.office_phone or "0242 000 202"
+        estate.office_hours = estate.office_hours or "Mon-Fri 08:00-16:30"
+        estate.address = estate.address or "4th Floor, Kopje Plaza, Harare"
+        if not estate.management_fee_percent:
+            estate.management_fee_percent = Decimal("10")
+        estate.save()
+        staff = staff or User.objects.filter(estate=estate, role=ROLE_ADMIN).first()
+        ExchangeRate.objects.create(effective_from=today - datetime.timedelta(days=30), zig_per_usd=Decimal("26.80"), note="RBZ interbank")
+
+        owners = [
+            Owner.objects.create(name=first, surname=last, id_number=_id_number(rng), gender=sex[s], nationality=zim,
+                                 phone_number1=owner_phone(290 + n), email=f"{first.lower()}.{last.lower()}@example.co.zw", authorized_by=staff)
+            for n, (first, last, s) in enumerate(LANDLORDS)
+        ]
+        behind = {2: 2, 5: 1, 8: 3}  # index -> months of rent not paid
+        homes = []
+        for i, (address, rent, months_let, months_left) in enumerate(RENTALS):
+            number = 201 + i
+            stand = Stand.objects.create(stand_number=number, stand_status=stand_status["Occupied" if months_let else "Vacant"], authorized_by=staff)
+            home = Home.objects.create(owner=owners[i // 3], stand=stand, address=address, authorized_by=staff,
+                                       home_status=home_status["Rented" if months_let else "Vacant"])
+            homes.append(home)
+            if not months_let:
+                continue
+            first, last, s = PEOPLE[i]
+            tenant = Resident.objects.create(name=first, surname=last, id_number=_id_number(rng), gender=sex[s], nationality=zim,
+                                             phone_number1=resident_phone(number), authorized_by=staff)
+            start = _months_back(today, months_let)
+            lease = rentals.start_lease(
+                home, tenant, user=staff, first_rent_usd=Decimal("0"), start_date=start, end_date=None if months_left is None else _months_ahead(today, months_left),
+                rent_usd=Decimal(rent), due_day=1 if i % 2 else 5, deposit_usd=Decimal(rent), deposit_paid_usd=Decimal(rent),
+                notes="Tenant pays own electricity and water." if i % 3 == 0 else "",
+            )
+            billed = [_months_back(today, back) for back in (2, 1, 0) if _months_back(today, back) >= start]
+            for month in billed:
+                rentals.bill_lease(lease, month, user=staff)
+            for month in billed[: max(0, len(billed) - behind.get(i, 0))]:
+                method = rng.choice([Payment.ECOCASH, Payment.ECOCASH, Payment.BANK, Payment.CASH])
+                p = Payment.objects.create(home=home, amount=Decimal(rent), amount_usd=Decimal(rent), method=method, status=Payment.PENDING,
+                                           channel=Payment.WHATSAPP if method == Payment.ECOCASH else Payment.OFFICE,
+                                           phone=tenant.phone_number1 if method == Payment.ECOCASH else "",
+                                           recorded_by=None if method == Payment.ECOCASH else staff)
+                p.mark_paid(when=_at(max(0, (today - month).days - rng.randint(1, 4)), 11))
+
+        # A tenant who moved out two months ago, part of the deposit kept.
+        old = Resident.objects.create(name="Gift", surname="Mukwena", id_number=_id_number(rng), gender=sex["M"], nationality=zim,
+                                      phone_number1=resident_phone(299), authorized_by=staff)
+        past = Lease.objects.create(home=homes[7], tenant=old, start_date=_months_back(today, 14), end_date=_months_back(today, 2),
+                                    rent_usd=Decimal("1050"), deposit_usd=Decimal("1050"), deposit_paid_usd=Decimal("1050"),
+                                    status=Lease.ENDED, ended_on=_months_back(today, 2), end_reason="Closed the shop",
+                                    deposit_returned_usd=Decimal("800"), deposit_deducted_usd=Decimal("250"), created_by=staff)
+        Invoice.objects.create(home=homes[7], lease=past, stand_number=208, address=homes[7].address, kind=Invoice.OTHER,
+                               description="Repainting and broken window", amount_usd=Decimal("250"), due_date=past.ended_on, created_by=staff)
+        kept = Payment.objects.create(home=homes[7], lease=past, amount=Decimal("250"), amount_usd=Decimal("250"), method=Payment.DEPOSIT,
+                                      status=Payment.PENDING, note="Kept from the deposit", recorded_by=staff)
+        kept.mark_paid(when=_at(60, 10))
+
+        for index, cat, text, amount, to, days_ago in [
+            (0, Expense.REPAIRS, "Replaced geyser element", 85, "Joseph Mandaza (plumber)", 12),
+            (2, Expense.RATES, "City of Harare rates", 140, "City of Harare", 20),
+            (4, Expense.REPAIRS, "Fixed leaking roof before the rains", 320, "Stanley Moyo Building", 33),
+            (6, Expense.INSURANCE, "Building insurance, quarter", 210, "Old Mutual", 40),
+            (7, Expense.REPAIRS, "Repainting after tenant left", 250, "Stanley Moyo Building", 55),
+            (9, Expense.UTILITIES, "Borehole pump service", 95, "Aqua Drill", 8),
+        ]:
+            Expense.objects.create(home=homes[index], date=today - datetime.timedelta(days=days_ago), category=cat, description=text,
+                                   amount_usd=Decimal(amount), paid_to=to, created_by=staff)
+        Expense.objects.create(home=None, date=today - datetime.timedelta(days=15), category=Expense.OTHER, description="Advertising vacant units",
+                               amount_usd=Decimal("40"), paid_to="Property.co.zw", created_by=staff)
+
+        for index, cat, text, status, days_ago in [
+            (0, "Water & plumbing", "Kitchen tap is dripping all night.", "Pending", 1),
+            (4, "Electricity", "Geyser trips the main switch.", "In progress", 3),
+            (9, "Security", "Gate motor is not opening.", "Resolved", 10),
+        ]:
+            home = homes[index]
+            c = Complain.objects.create(stand_number=home.stand.stand_number, home=home.address, complain_code=random_numbers(),
+                                        resident_phone_number=home.resident.phone_number1, description=text, complaint_category=category[cat],
+                                        compalint_status=complaint_status[status], assigned_to=staff if status != "Pending" else None)
+            Complain.all_estates.filter(pk=c.pk).update(date_created=_at(days_ago, 10))
+        for cat, first, last, area in PROVIDERS[:4] + PROVIDERS[6:7]:
+            if cat in provider_category:
+                Provider.objects.create(name=first, surname=last, address=area, id_number=_id_number(rng),
+                                        phone_number1=f"0778{rng.randint(100000, 999999)}", phone_number2=None,
+                                        provider_category=provider_category[cat], authorized_by=staff)
+        if staff:
+            for title, body, days_ago in [
+                ("Rent is due on the 1st or 5th", "Pay on WhatsApp or the portal with EcoCash, or by bank transfer. Your receipt comes by message.", 4),
+                ("Office closed on Unity Day", "The office is closed on 22 December. For urgent repairs send a WhatsApp message.", 8),
+            ]:
+                n = Notice.objects.create(title=title, body=body, category="general", pinned=False, created_by=staff, publish_at=_at(days_ago, 9))
+                Notice.all_estates.filter(pk=n.pk).update(publish_at=_at(days_ago, 9))
+    return {"homes": len(homes), "occupied": sum(1 for h in homes if h.resident_id)}
+
+
 @transaction.atomic
 def seed(estate, staff=None):
     """Fill a (sandbox) estate with sample data. `staff` is the admin user recorded as creator."""
+    if estate.is_rental:
+        return seed_rental(estate, staff)
     rng = random.Random(estate.pk)
     gender = param(Gender, ["Female", "Male"])
     nationality = param(Nationality, ["Zimbabwean", "South African", "Zambian"])
@@ -299,7 +445,7 @@ def seed(estate, staff=None):
 ESTATE_MODELS_IN_DELETE_ORDER = [
     "estates.SandboxMessage", "assist.ConversationMessage", "assist.Conversation", "assist.EmergencyAlert",
     "portal.HouseholdRequest", "portal.HouseholdMember", "gatepass.WalkInRequest", "levy.Payment", "levy.Invoice",
-    "levy.ExchangeRate", "complaint.ComplaintPhoto", "complaint.Complain", "whitelist.WhiteList", "whitelist.WhiteListGuest",
+    "levy.ExchangeRate", "rentals.Expense", "rentals.Lease", "complaint.ComplaintPhoto", "complaint.Complain", "whitelist.WhiteList", "whitelist.WhiteListGuest",
     "visit.Visit", "notice.Notice", "provider.Provider", "home.Home", "stand.Stand", "resident.Resident", "owner.Owner",
 ]
 
@@ -315,13 +461,37 @@ def wipe(estate):
         apps.get_model(label).all_estates.filter(estate=estate).delete()
 
 
-def create_sandbox(name, slug=None):
-    """A new sandbox estate with sample data, an admin and a guard. Returns (estate, [(role, username, password)])."""
-    estate = Estate.objects.create(name=name, slug=slug or "", sandbox=True)
+def create_sandbox(name, slug=None, kind=Estate.GATED, organisation=None):
+    """A new sandbox estate with sample data and logins. Returns (estate, [(role, username, password)])."""
+    estate = Estate.objects.create(name=name, slug=slug or "", sandbox=True, kind=kind, organisation=organisation)
     admin = create_tester(estate, ROLE_ADMIN)
-    guard = create_tester(estate, ROLE_GUARD)
+    logins = [("Admin", *admin)]
+    if not estate.is_rental:  # a rental portfolio has no gate
+        logins.append(("Guard", *create_tester(estate, ROLE_GUARD)))
     seed(estate, staff=User.objects.get(username=admin[0]))
-    return estate, [("Admin", *admin), ("Guard", *guard)]
+    return estate, logins
+
+
+def create_demo_agent(name):
+    """
+    A managing agent to show around: one gated estate and one rental portfolio
+    with sample data, and a login that works across both.
+    Returns (organisation, [estates], [(role, username, password)]).
+    """
+    from django.utils.text import slugify
+
+    from .models import Organisation
+
+    organisation = Organisation.objects.create(name=name, kind=Organisation.AGENT)
+    gated, _ = create_sandbox(f"{name}: Msasa Park Estate", organisation=organisation)
+    rental, _ = create_sandbox(f"{name}: Rental Portfolio", kind=Estate.RENTAL, organisation=organisation)
+    base = f"{slugify(name)[:30]}-agent"
+    username, n = base, 2
+    while User.objects.filter(username=username).exists():
+        username, n = f"{base}-{n}", n + 1
+    secret = password()
+    User.objects.create_user(username=username, password=secret, role=ROLE_ADMIN, organisation=organisation, first_name="Demo", last_name="Agent")
+    return organisation, [gated, rental], [("Agent", username, secret)]
 
 
 def reset(estate):

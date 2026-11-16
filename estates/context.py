@@ -4,7 +4,8 @@ Which estate the current code is working for.
 Resolved, in order:
   1. an explicit `use_estate(...)` block (WhatsApp bot, Paynow callbacks, commands);
   2. the logged-in user's estate (platform superusers may pick one with the
-     X-Estate header, and otherwise see every estate);
+     X-Estate header, and otherwise see every estate; staff of a managing
+     agent or landlord pick one of *their* estates the same way);
   3. for the public resident portal: the X-Estate header or ?estate= slug;
   4. when the installation has exactly one active estate: that one.
 
@@ -52,14 +53,31 @@ def _only_estate():
     return estates[0] if len(estates) == 1 else None
 
 
+def _organisation_estate(user, slug):
+    """One of the organisation's own estates: the one asked for, or its only one. Never another customer's."""
+    from .models import Estate
+
+    if not user.organisation.active:
+        return None
+    estates = Estate.objects.filter(organisation_id=user.organisation_id, active=True)
+    if slug:
+        return estates.filter(slug=slug).first()
+    estates = list(estates[:2])
+    return estates[0] if len(estates) == 1 else None
+
+
 def _resolve(request):
     user = getattr(request, "user", None)
     requested = request.META.get(HEADER) or request.GET.get("estate")
     if user is not None and user.is_authenticated:
         if getattr(user, "estate_id", None):
-            return user.estate if user.estate.active else None  # switched-off estate: no data
+            estate = user.estate
+            owner = estate.organisation if estate.organisation_id else None
+            return estate if estate.active and (owner is None or owner.active) else None  # switched off: no data
         if user.is_superuser:
             return _by_slug(requested) if requested else ALL
+        if getattr(user, "organisation_id", None):
+            return _organisation_estate(user, requested)
         return _only_estate()
     if requested:
         return _by_slug(requested)

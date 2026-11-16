@@ -126,13 +126,29 @@ class ResetSandbox(APIView):
 # ---------------------------------------------------------------- platform staff
 
 class CreateSandbox(APIView):
-    """POST {name}: a new sandbox estate with sample data and two logins (shown once)."""
+    """
+    POST {name, kind}: a new sandbox with sample data and logins (shown once).
+    kind: "estate" (default), "rental" (a rental portfolio), or "agent"
+    (a managing agent with one of each and a login across both).
+    """
 
     permission_classes = [IsPlatformStaff]
 
     def post(self, request):
-        name = (request.data.get("name") or "").strip() or "Sandbox Estate"
-        estate, logins = sandbox_seed.create_sandbox(name[:120])
+        kind = request.data.get("kind") or Estate.GATED
+        if kind not in (Estate.GATED, Estate.RENTAL, "agent"):
+            return Response({"kind": ["estate, rental or agent."]}, status=400)
+        name = (request.data.get("name") or "").strip()[:100]
+        if kind == "agent":
+            from .models import Organisation
+
+            name = name or "Demo Agents"
+            if Organisation.objects.filter(name=name).exists():
+                return Response({"name": ["That name is taken."]}, status=400)
+            organisation, estates, logins = sandbox_seed.create_demo_agent(name)
+            return Response({"id": estates[0].id, "slug": estates[0].slug, "name": organisation.name, "estates": [e.slug for e in estates],
+                             "logins": [{"role": r, "username": u, "password": p} for r, u, p in logins]}, status=201)
+        estate, logins = sandbox_seed.create_sandbox(name or ("Sandbox Rentals" if kind == Estate.RENTAL else "Sandbox Estate"), kind=kind)
         return Response({"id": estate.id, "slug": estate.slug, "name": estate.name,
                          "logins": [{"role": r, "username": u, "password": p} for r, u, p in logins]}, status=201)
 

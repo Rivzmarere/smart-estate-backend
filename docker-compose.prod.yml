@@ -45,6 +45,16 @@ services:
         condition: service_healthy
     command: sh -c "while true; do python manage.py paynow_poll; sleep 120; done"
 
+  # Rental portfolios: bills the month's rent and reminds tenants. Runs every 6 hours; nothing is sent twice.
+  rent-run:
+    build: .
+    restart: unless-stopped
+    env_file: ${ENV_FILE:-.env}
+    depends_on:
+      api:
+        condition: service_healthy
+    command: sh -c "while true; do python manage.py rent_run; sleep 21600; done"
+
   # Nightly database dump and media archive, kept for BACKUP_KEEP_DAYS days.
   # Copy /backups off the server too (see DEPLOY.md).
   backup:

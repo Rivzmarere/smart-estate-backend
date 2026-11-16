@@ -23,6 +23,15 @@ def money(value):
     return Decimal(value).quantize(CENTS, rounding=ROUND_HALF_UP)
 
 
+def stamp_lease(record):
+    """A new invoice or payment for a rented property belongs to the tenant renting it now."""
+    if record.pk or record.lease_id or not record.home_id:
+        return
+    from rentals.models import Lease
+
+    record.lease = Lease.all_estates.filter(home_id=record.home_id, status=Lease.ACTIVE).first()
+
+
 class ExchangeRate(EstateScoped):
     """ZiG per US dollar from a given day (the estate's chosen rate, e.g. the RBZ interbank rate)."""
 
@@ -51,10 +60,13 @@ class Invoice(EstateScoped):
     SPECIAL = "special"
     PENALTY = "penalty"
     OTHER = "other"
-    KINDS = [(LEVY, "Monthly levy"), (SPECIAL, "Special levy"), (PENALTY, "Penalty"), (OTHER, "Other")]
+    RENT = "rent"
+    KINDS = [(LEVY, "Monthly levy"), (SPECIAL, "Special levy"), (PENALTY, "Penalty"), (RENT, "Rent"), (OTHER, "Other")]
 
     number = models.CharField(max_length=20, unique=True, null=True, blank=True)
     home = models.ForeignKey(Home, on_delete=models.PROTECT, related_name="invoices")
+    lease = models.ForeignKey("rentals.Lease", on_delete=models.PROTECT, null=True, blank=True, related_name="invoices", editable=False)
+    last_reminder_on = models.DateField(null=True, blank=True, editable=False)
     stand_number = models.IntegerField()
     address = models.CharField(max_length=200)
     kind = models.CharField(max_length=10, choices=KINDS, default=LEVY)
@@ -75,10 +87,16 @@ class Invoice(EstateScoped):
                 fields=["home", "period"],
                 condition=models.Q(kind="levy", void=False),
                 name="one_monthly_levy_per_home_per_month",
-            )
+            ),
+            models.UniqueConstraint(
+                fields=["lease", "period"],
+                condition=models.Q(kind="rent", void=False),
+                name="one_rent_invoice_per_lease_per_month",
+            ),
         ]
 
     def save(self, *args, **kwargs):
+        stamp_lease(self)
         super().save(*args, **kwargs)
         if not self.number:
             self.number = f"INV{self.issued_on:%y%m}-{self.pk:05d}"
@@ -99,6 +117,7 @@ class Payment(EstateScoped):
     ONEMONEY = "onemoney"
     INNBUCKS = "innbucks"
     CARD = "card"
+    DEPOSIT = "deposit"
     METHODS = [
         (CASH, "Cash"),
         (BANK, "Bank transfer"),
@@ -106,6 +125,7 @@ class Payment(EstateScoped):
         (ONEMONEY, "OneMoney"),
         (INNBUCKS, "InnBucks"),
         (CARD, "Card"),
+        (DEPOSIT, "From the deposit"),
     ]
     MOBILE_METHODS = {ECOCASH, ONEMONEY, INNBUCKS}
 
@@ -120,6 +140,7 @@ class Payment(EstateScoped):
     CHANNELS = [(OFFICE, "Estate office"), (WHATSAPP, "WhatsApp")]
 
     home = models.ForeignKey(Home, on_delete=models.PROTECT, related_name="payments")
+    lease = models.ForeignKey("rentals.Lease", on_delete=models.PROTECT, null=True, blank=True, related_name="payments", editable=False)
     currency = models.CharField(max_length=3, choices=CURRENCIES, default=USD)
     amount = models.DecimalField(max_digits=12, decimal_places=2, help_text="In the payment currency")
     exchange_rate = models.DecimalField(max_digits=12, decimal_places=4, null=True, blank=True, help_text="ZiG per USD, for ZiG payments")
@@ -143,6 +164,10 @@ class Payment(EstateScoped):
 
     class Meta:
         ordering = ["-created_at"]
+
+    def save(self, *args, **kwargs):
+        stamp_lease(self)
+        super().save(*args, **kwargs)
 
     @property
     def reference_for_paynow(self):

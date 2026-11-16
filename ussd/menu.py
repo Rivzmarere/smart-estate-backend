@@ -119,8 +119,10 @@ def main_menu(session, access):
     if access.can("visitors"):
         items += [("Book a visitor", book_visitor), ("My visitors", my_visitors)]
     if access.can("levy"):
-        items.append(("Levy balance / pay", levy))
-    items += [("Report a fault", report_fault), ("Emergency", emergency)]
+        items.append((f"{home.estate.bill_word.capitalize()} balance / pay", levy))
+    items.append(("Report a fault", report_fault))
+    if access.can("emergency"):
+        items.append(("Emergency", emergency))
     choice = pick(session.next(menu(cut(home.estate.name, 40), [label for label, _ in items])), items)
     if choice is None:
         raise End("Invalid choice. Please dial again.")
@@ -180,10 +182,10 @@ def levy(session, access):
     balance = acc["balance"]
     summary = f"Balance {usd(balance)}" + (f"\nOverdue {usd(acc['arrears'])}" if acc["arrears"] > 0 else "")
     if balance <= 0:
-        raise End("Your levy account is up to date. Thank you!")
+        raise End(f"Your {home.estate.bill_word} account is up to date. Thank you!")
     method = paynow.method_for_phone(session.phone)
     if paynow.Payment.USD not in paynow.available_currencies(home.estate) or not method:
-        raise End(summary + "\nTo pay, contact the estate office.")
+        raise End(summary + ("\nTo pay, contact the office." if home.estate.is_rental else "\nTo pay, contact the estate office."))
     if pending_payment(home):
         raise End(summary + "\nA payment request is already waiting on your phone.")
     choice = session.next(summary + "\n1. Pay all\n2. Pay another amount")

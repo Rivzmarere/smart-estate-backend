@@ -34,7 +34,17 @@ class User(AbstractUser):
         help_text="The estate this admin or guard works for. Empty only for platform staff.",
     )
 
+    organisation = models.ForeignKey(
+        "estates.Organisation", on_delete=models.PROTECT, null=True, blank=True, related_name="users",
+        help_text="Staff of a managing agent or landlord: they work across all of its estates.",
+    )
+
     objects = CustomUserManager()
+
+    @property
+    def spans_organisation(self):
+        """Works for an agent or landlord across its estates (not tied to one estate)."""
+        return bool(self.organisation_id and not self.estate_id)
     USERNAME_FIELD = "username"
     def __str__(self):
         return self.username

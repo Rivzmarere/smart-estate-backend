@@ -123,3 +123,28 @@ class SandboxTests(APITestCase):
         self.assertEqual(self.client.post("/estates/sandbox", {"name": "x"}, format="json").status_code, 403)
         self.client.force_authenticate(self.platform)
         self.assertEqual(self.client.post(f"/estates/{real.id}/reset").status_code, 404)
+
+    def test_rental_sandbox(self):
+        self.client.force_authenticate(self.platform)
+        made = self.client.post("/estates/sandbox", {"name": "Demo Rentals", "kind": "rental"}, format="json")
+        self.assertEqual(made.status_code, 201, made.content)
+        self.assertEqual([l["role"] for l in made.json()["logins"]], ["Admin"])  # no gate, so no guard
+        self.login(User.objects.get(username=made.json()["logins"][0]["username"]))
+        body = self.client.get("/rentals/properties").json()
+        self.assertEqual((body["totals"]["properties"], body["totals"]["let"], body["totals"]["vacant"]), (12, 10, 2))
+        self.assertIn(body["totals"]["tenants_in_arrears"], (2, 3))  # the third is a month behind, late from the 2nd
+        self.assertGreater(float(self.client.get("/rentals/statement").json()["totals"]["expenses"]), 0)
+        self.assertEqual(self.client.post("/sandbox/reset").status_code, 200)
+        self.assertEqual(self.client.get("/rentals/properties").json()["totals"]["let"], 10)
+        menu = self.client.post("/sandbox/whatsapp", {"phone": "0771000201", "text": "hi"}, format="json").json()["replies"]
+        self.assertIn("Pay rent", [o["title"] for o in menu[-1]["options"]])
+
+    def test_demo_agent(self):
+        self.client.force_authenticate(self.platform)
+        made = self.client.post("/estates/sandbox", {"name": "Demo Agents", "kind": "agent"}, format="json").json()
+        self.assertEqual(len(made["estates"]), 2)
+        self.login(User.objects.get(username=made["logins"][0]["username"]))
+        overview = self.client.get("/organisation/overview").json()
+        self.assertEqual(overview["totals"]["estates"], 2)
+        self.assertEqual(overview["totals"]["units"], 32)
+        self.assertGreater(float(overview["totals"]["arrears"]), 0)

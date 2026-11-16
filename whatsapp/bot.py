@@ -173,6 +173,9 @@ def _handle_message(wa_id, message, home):
 
     lowered = text.lower()
     if lowered in EMERGENCY_WORDS:
+        if home.estate.is_rental:
+            session.save()
+            return show_menu(session, home, intro=NO_GATE)
         return start_emergency(session, home)
 
     # Talking to the office: everything goes to the office until they say "menu".
@@ -198,27 +201,51 @@ def show_menu(session, home, intro=None):
     session.save()
     name = home.resident.name if home.resident else "there"
     body = intro or f"Hi {name}, welcome to {home.estate.name} ({home.address}). What would you like to do?"
-    client.send_list(
-        session.wa_id,
-        body,
-        "Menu",
-        [
-            ("book", "Book a visitor", "Get a gate code for someone visiting you"),
-            ("visitors", "My visitors", "See or cancel upcoming visitors"),
-            ("levy", "Pay levy", "See your balance and pay with EcoCash or OneMoney"),
-            ("repair", "Report a repair", "Log a fault or complaint with the estate"),
+    client.send_list(session.wa_id, body, "Menu", menu_rows(home.estate), section_title="Smart Estate")
+
+
+def menu_rows(estate):
+    """A rental portfolio has no gate or security team, and its tenants pay rent, not a levy."""
+    if estate.is_rental:
+        return [
+            ("levy", "Pay rent", "See your balance and pay with EcoCash or OneMoney"),
+            ("repair", "Report a repair", "Tell your landlord about a fault"),
             ("repairs", "My repairs", "Progress on repairs you reported"),
-            ("providers", "Service providers", "Plumbers, electricians and others the estate uses"),
-            ("notices", "Estate notices", "Latest news from the estate office"),
-            ("office", "Talk to the office", "Chat with a person at the estate office"),
-            ("emergency", "🚨 Emergency", "Alert estate security now"),
+            ("providers", "Service providers", "Plumbers, electricians and others we use"),
+            ("notices", "Notices", "Latest news from the office"),
+            ("office", "Talk to the office", "Chat with a person at the office"),
             ("help", "Help", "How this works"),
-        ],
-        section_title="Smart Estate",
-    )
+        ]
+    return [
+        ("book", "Book a visitor", "Get a gate code for someone visiting you"),
+        ("visitors", "My visitors", "See or cancel upcoming visitors"),
+        ("levy", "Pay levy", "See your balance and pay with EcoCash or OneMoney"),
+        ("repair", "Report a repair", "Log a fault or complaint with the estate"),
+        ("repairs", "My repairs", "Progress on repairs you reported"),
+        ("providers", "Service providers", "Plumbers, electricians and others the estate uses"),
+        ("notices", "Estate notices", "Latest news from the estate office"),
+        ("office", "Talk to the office", "Chat with a person at the estate office"),
+        ("emergency", "🚨 Emergency", "Alert estate security now"),
+        ("help", "Help", "How this works"),
+    ]
+
+
+NO_GATE = "This is not available here. For an emergency call Police 995, Ambulance 994 or Fire 993."
 
 
 def handle_menu(session, home, text, choice):
+    if choice in ("book", "visitors", "emergency") and home.estate.is_rental:
+        return show_menu(session, home, intro=NO_GATE + " What would you like to do?")
+    if choice == "help" and home.estate.is_rental:
+        client.send_text(
+            session.wa_id,
+            "Smart Estate on WhatsApp:\n"
+            "• Pay rent: see what you owe and pay from your EcoCash or OneMoney wallet; the receipt comes here.\n"
+            "• Report a repair: your landlord is notified, and you can send photos. I'll tell you when the status changes.\n"
+            "• Talk to the office: chat with a person at the office.\n"
+            "Type *menu* at any time to start again.",
+        )
+        return show_menu(session, home, intro="Anything else?")
     if choice == "book":
         return start_booking(session, home)
     if choice == "visitors":
@@ -565,13 +592,14 @@ def show_levy(session, home):
 
     access = access_to(home, session.wa_id)
     if access is None or not access.can("levy"):
-        return show_menu(session, home, intro="Only the home's owner and main resident can see the levy account. What would you like to do?")
+        return show_menu(session, home, intro=f"Only the home's owner and main resident can see the {home.estate.bill_word} account. What would you like to do?")
+    word = home.estate.bill_word
     acc = account(home)
     balance = acc["balance"]
     if balance <= 0:
         extra = f" You have {fmt_usd(-balance)} credit." if balance < 0 else ""
-        return show_menu(session, home, intro=f"Your levy account for {home.address} is up to date ✅.{extra} What would you like to do?")
-    lines = [f"Levy account for {home.address}", f"Balance: *{fmt_usd(balance)}*"]
+        return show_menu(session, home, intro=f"Your {word} account for {home.address} is up to date ✅.{extra} What would you like to do?")
+    lines = [f"{word.capitalize()} account for {home.address}", f"Balance: *{fmt_usd(balance)}*"]
     if acc["arrears"] > 0:
         lines.append(f"Overdue: {fmt_usd(acc['arrears'])}")
     currencies = paynow.available_currencies(home.estate)
@@ -585,7 +613,7 @@ def show_levy(session, home):
         client.send_text(session.wa_id, "\n".join(lines))
         return show_menu(session, home, intro="Anything else?")
     if not currencies:
-        lines.append("\nTo pay, please contact the estate office.")
+        lines.append("\nTo pay, please contact the office." if home.estate.is_rental else "\nTo pay, please contact the estate office.")
         client.send_text(session.wa_id, "\n".join(lines))
         return show_menu(session, home, intro="Anything else?")
     session.state, session.data = LEVY_CHOICE, {}

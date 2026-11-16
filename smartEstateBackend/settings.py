@@ -73,6 +73,7 @@ INSTALLED_APPS = [
     "assist",
     "portal",
     "ussd",
+    "rentals",
 ]
 
 MIDDLEWARE = [

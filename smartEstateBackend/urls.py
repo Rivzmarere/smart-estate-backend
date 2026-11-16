@@ -43,4 +43,5 @@ urlpatterns = [
     path('', include('assist.url')),
     path('', include('portal.url')),
     path('', include('ussd.url')),
+    path('', include('rentals.url')),
 ]

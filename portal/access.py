@@ -35,6 +35,8 @@ class HomeAccess:
     roles: set = field(default_factory=set)
 
     def can(self, action):
+        if not self.home.estate.offers(action):  # e.g. no gate or security team in a rental portfolio
+            return False
         return bool(self.roles & PERMISSIONS[action])
 
     @property

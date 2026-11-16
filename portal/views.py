@@ -163,7 +163,7 @@ class Me(ResidentView):
         estate = request.user.estate
         return Response({
             "phone": local(self.phone),
-            "estate": {"name": estate.name, "slug": estate.slug, "office_phone": estate.office_phone},
+            "estate": {"name": estate.name, "slug": estate.slug, "office_phone": estate.office_phone, "kind": estate.kind},
             "homes": [home_card(item) for item in homes_for_phone(self.phone)],
         })
 
@@ -314,7 +314,8 @@ class Levy(ResidentView):
             "payments": [
                 {"id": p.id, "receipt_number": p.receipt_number, "amount": p.amount, "currency": p.currency, "amount_usd": p.amount_usd,
                  "method": p.get_method_display(), "status": p.status, "paid_at": p.paid_at, "created_at": p.created_at}
-                for p in Payment.objects.filter(home=home).order_by("-created_at")[:24]
+                # A tenant sees only their own payments, never the previous tenant's.
+                for p in Payment.objects.filter(**({"lease": acc["lease"]} if acc["lease"] else {"home": home})).order_by("-created_at")[:24]
             ],
         })
 

@@ -97,5 +97,5 @@ class PublicEstate(APIView):
             "name": estate.name, "slug": estate.slug, "address": estate.address,
             "office_phone": estate.office_phone, "office_hours": estate.office_hours,
             "whatsapp_number": "".join(ch for ch in whatsapp if ch.isdigit()),
-            "sandbox": estate.sandbox,
+            "sandbox": estate.sandbox, "kind": estate.kind,
         })

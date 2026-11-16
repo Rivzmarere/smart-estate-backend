@@ -45,3 +45,29 @@ def start_payment(home, amount_usd, currency, phone, wa_id=""):
         payment.save(update_fields=["status", "failure_reason"])
         raise
     return payment, instructions
+
+
+def refresh_payment(payment, give_up_after=None):
+    """
+    Ask Paynow (or the sandbox) about a waiting payment and act on the answer:
+    receipt when paid, a message when it failed. Returns the payment's status.
+    """
+    from django.db import transaction
+
+    from .notifications import send_payment_failed, send_receipt
+
+    with transaction.atomic():
+        locked = Payment.objects.select_for_update().select_related("estate", "home__stand", "home__resident").get(pk=payment.pk)
+        if locked.status != Payment.PENDING:
+            return locked.status
+        status = paynow.poll(locked)
+        if status == Payment.PENDING and give_up_after and locked.created_at < timezone.now() - give_up_after:
+            locked.status = Payment.FAILED
+            locked.failure_reason = "No answer from Paynow within 24 hours"
+            locked.save(update_fields=["status", "failure_reason"])
+            status = Payment.FAILED
+    if status == Payment.PAID:
+        send_receipt(locked)
+    elif status in (Payment.FAILED, Payment.CANCELLED):
+        send_payment_failed(locked)
+    return status

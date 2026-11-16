@@ -61,8 +61,18 @@ def homes_for_phone(phone, across_estates=False, action=None):
     variants = phone_variants(phone)
     if not variants:
         return []
-    manager = Home.all_estates if across_estates else Home.objects
-    homes = manager.filter(status=True, estate__active=True).select_related("stand", "resident", "owner", "estate")
+    from estates.context import explicit_estate
+
+    if across_estates:
+        working_in = explicit_estate()
+        homes = Home.all_estates.all()
+        if working_in is not None and getattr(working_in, "sandbox", False):
+            homes = homes.filter(estate=working_in)  # a simulator works inside its own sandbox estate
+        else:
+            homes = homes.filter(estate__sandbox=False)  # real numbers never land in a demo estate
+    else:
+        homes = Home.objects.all()
+    homes = homes.filter(status=True, estate__active=True).select_related("stand", "resident", "owner", "estate")
 
     found = {}
 

@@ -186,3 +186,23 @@ networks or an aggregator, set `USSD_SECRET`, and give the gateway
 the common format (`sessionId`, `serviceCode`, `phoneNumber`, `text` with
 answers joined by `*`; reply `CON ...` / `END ...`); a gateway with another
 format needs a small adapter around `ussd.menu.handle()`.
+
+## Sandbox estates (for testers and demos)
+
+A sandbox estate is a full, separate estate filled with sample data (20 homes,
+owners, tenants, family members, visitors, repairs, levies, notices, providers).
+Nothing in it reaches the outside world: SMS and WhatsApp messages go to the
+sandbox Outbox, EcoCash payments are simulated (approved after a few seconds;
+numbers ending 3333 cancel), and portal sign-in codes are shown on screen.
+Real phone numbers never land in a sandbox on WhatsApp or USSD.
+
+```bash
+python manage.py sandbox create "Sandbox Estate"      # prints admin and guard logins
+python manage.py sandbox tester sandbox-estate --role Guard --label tendai
+python manage.py sandbox reset sandbox-estate
+```
+
+Platform staff can do the same from the back office (Estates page). Demo
+residents: main resident of stand 1NN is 0771 000 1NN, its owner 0772 000 1NN,
+household members 0773 000 1NN. In the back office, **Sandbox** has a phone
+simulator for WhatsApp and USSD, the Outbox, and the list of demo people.

@@ -47,7 +47,9 @@ def notify(phone, text, template="", template_params=(), buttons=None, template_
     `template_buttons`), if one is configured.
     Returns True if WhatsApp accepted a message. Never raises.
     """
-    if not settings.WHATSAPP_ENABLED:
+    from estates.context import in_sandbox
+
+    if not settings.WHATSAPP_ENABLED and not in_sandbox():
         return False
     try:
         wa_id = international(phone)

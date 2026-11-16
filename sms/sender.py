@@ -79,6 +79,10 @@ def send_sms(phone, message):
         logger.info("Not sending SMS to non-Zimbabwean or invalid number %r", phone)
         return False
     message = message[:MAX_LENGTH]
+    from estates.sandbox import capture
+
+    if capture("sms", to, message):
+        return True
     backend_name = settings.SMS_BACKEND
     backend = BACKENDS.get(backend_name, _console)
     try:

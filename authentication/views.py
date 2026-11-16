@@ -109,6 +109,7 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
         token['estate'] = estate.name if estate else "All estates"
         token['estate_slug'] = estate.slug if estate else ""
         token['platform'] = bool(user.is_superuser and not user.estate_id)
+        token['sandbox'] = bool(estate and estate.sandbox)
         return token
 
     def validate(self, attrs):

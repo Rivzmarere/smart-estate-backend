@@ -58,17 +58,17 @@ def _hash(phone, code):
 
 
 def issue_code(estate, phone):
-    """Send a 6-digit code. Returns False if too many were asked for recently."""
+    """Send a 6-digit code. Returns the code, or None if too many were asked for recently."""
     recent = LoginCode.objects.filter(estate=estate, phone=phone, created_at__gte=timezone.now() - CODE_WINDOW).count()
     if recent >= MAX_CODES_PER_WINDOW:
-        return False
+        return None
     code = f"{secrets.randbelow(1_000_000):06d}"
     LoginCode.objects.filter(estate=estate, phone=phone, used=False).update(used=True)  # only the newest works
     LoginCode.objects.create(estate=estate, phone=phone, code_hash=_hash(phone, code), expires_at=timezone.now() + CODE_LIFETIME)
     text = f"Your {estate.name} portal code is {code}. It expires in 10 minutes. Never share it."
     if not notify(phone, text):  # WhatsApp is free when the resident has written recently
         send_sms(phone, text)
-    return True
+    return code
 
 
 def check_code(estate, phone, code):

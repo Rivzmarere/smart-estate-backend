@@ -34,6 +34,10 @@ REMOTE_TRANSACTION_URL = "https://www.paynow.co.zw/interface/remotetransaction"
 
 OUTBOX = []  # dry-run requests, newest last
 
+# Sandbox estates: simulated Paynow (see estates.sandbox).
+SANDBOX_INTEGRATION = ("sandbox", "sandbox-integration-key")
+SANDBOX_APPROVAL_SECONDS = 6
+
 PAID_STATUSES = {"paid", "awaiting delivery", "delivered"}
 FAILED_STATUSES = {"failed", "disputed", "refunded"}
 CANCELLED_STATUSES = {"cancelled"}
@@ -52,6 +56,8 @@ def integration(currency, estate=None):
     Each estate can have its own Paynow account (money goes to that estate);
     otherwise the server-wide settings are used.
     """
+    if estate is not None and estate.sandbox:
+        return SANDBOX_INTEGRATION
     if currency == Payment.ZWG:
         own = (estate.paynow_zwg_integration_id, estate.paynow_zwg_integration_key) if estate else ("", "")
         server = settings.PAYNOW_ZWG_INTEGRATION_ID, settings.PAYNOW_ZWG_INTEGRATION_KEY
@@ -127,7 +133,7 @@ def start_mobile_payment(payment, description):
     ]
     pairs.append(("hash", sign(pairs, key)))
 
-    if settings.PAYNOW_DRY_RUN:
+    if settings.PAYNOW_DRY_RUN or payment.estate.sandbox:
         OUTBOX.append(dict(pairs))
         reply = [("status", "Ok"), ("pollurl", f"https://www.paynow.co.zw/Interface/CheckPayment/?guid=dry-run-{payment.pk}"),
                  ("instructions", "Dial *151*2*4# if no prompt appears"), ("paynowreference", f"DRY{payment.pk}")]
@@ -188,8 +194,23 @@ def apply_status(payment, pairs):
     return payment.status
 
 
+def simulate(payment):
+    """Sandbox: the payer 'approves' a few seconds later (numbers ending 3333 cancel)."""
+    from django.utils import timezone
+
+    if (timezone.now() - payment.created_at).total_seconds() < SANDBOX_APPROVAL_SECONDS:
+        return payment.status
+    status = "Cancelled" if payment.phone.endswith("3333") else "Paid"
+    pairs = [("reference", payment.reference_for_paynow), ("paynowreference", f"SBX{payment.pk}"),
+             ("amount", f"{payment.amount:.2f}"), ("status", status)]
+    pairs.append(("hash", sign(pairs, SANDBOX_INTEGRATION[1])))
+    return apply_status(payment, pairs)
+
+
 def poll(payment):
     """Ask Paynow for the latest status (used when the result POST does not arrive)."""
+    if payment.estate.sandbox:
+        return simulate(payment)
     if not payment.poll_url or settings.PAYNOW_DRY_RUN:
         return payment.status
     if not payment.poll_url.startswith("https://www.paynow.co.zw/"):

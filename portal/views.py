@@ -25,7 +25,7 @@ from gatepass.models import WalkInRequest
 from levy import paynow
 from levy.accounts import account, in_zig
 from levy.models import Payment
-from levy.services import pending_payment, start_payment
+from levy.services import pending_payment, refresh_payment, start_payment
 from parameters.models.models_complaint_category import ComplaintCategory
 from parameters.models.models_complaint_status import ComplaintStatus
 from parameters.models.models_transport_type import TransportType
@@ -91,9 +91,16 @@ class RequestCode(APIView):
         serializer.is_valid(raise_exception=True)
         phone = serializer.validated_data["phone"]
         # Same answer whether or not the number is registered, so the form cannot be used to look people up.
-        if homes_for_phone(phone) and not auth.issue_code(estate, phone):
-            return Response({"detail": "Too many codes asked for. Please wait 15 minutes."}, status=429)
-        return Response({"sent": True, "message": f"If {local(phone)} is registered with {estate.name}, a code is on its way."})
+        code = None
+        if homes_for_phone(phone):
+            code = auth.issue_code(estate, phone)
+            if code is None:
+                return Response({"detail": "Too many codes asked for. Please wait 15 minutes."}, status=429)
+        body = {"sent": True, "message": f"If {local(phone)} is registered with {estate.name}, a code is on its way."}
+        if estate.sandbox:  # demo estate: nothing is really sent, so show the code
+            body["sandbox_code"] = code
+            body["message"] = "Sandbox: no SMS is sent. Use the code shown." if code else "That number is not in the sandbox estate."
+        return Response(body)
 
 
 class VerifyCode(APIView):
@@ -349,6 +356,12 @@ class PaymentStatus(ResidentView):
     def get(self, request, home_id, payment_id):
         home = self.access(home_id).home
         p = get_object_or_404(Payment, pk=payment_id, home=home)
+        if p.status == Payment.PENDING:
+            try:
+                refresh_payment(p)  # also completes simulated payments in a sandbox estate
+                p.refresh_from_db()
+            except paynow.PaynowError:
+                pass
         return Response({"id": p.id, "status": p.status, "receipt_number": p.receipt_number, "failure_reason": p.failure_reason})
 
 

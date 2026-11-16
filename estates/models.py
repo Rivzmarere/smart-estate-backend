@@ -20,6 +20,9 @@ class Estate(models.Model):
     name = models.CharField(max_length=120)
     slug = models.SlugField(max_length=60, unique=True, help_text="Short name used in the resident portal address")
     active = models.BooleanField(default=True)
+    sandbox = models.BooleanField(
+        default=False, help_text="Demo estate for testers: SMS/WhatsApp are captured, not sent; payments are simulated"
+    )
     address = models.CharField(max_length=200, blank=True)
     # Who residents and the system reach
     office_phone = models.CharField(max_length=20, blank=True, help_text="Shown to residents. A mobile number also gets an SMS when a resident asks to chat.")
@@ -85,3 +88,20 @@ class EstateScoped(models.Model):
                 raise ValueError(f"Cannot save {type(self).__name__} without an estate")
             self.estate = estate
         super().save(*args, **kwargs)
+
+
+class SandboxMessage(EstateScoped):
+    """An SMS or WhatsApp message a sandbox estate would have sent. Nothing leaves the server."""
+
+    SMS = "sms"
+    WHATSAPP = "whatsapp"
+    CHANNELS = [(SMS, "SMS"), (WHATSAPP, "WhatsApp")]
+
+    channel = models.CharField(max_length=10, choices=CHANNELS)
+    to = models.CharField(max_length=32, db_index=True)
+    text = models.TextField()
+    payload = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]

@@ -105,3 +105,14 @@ def current_user():
     if user is None or not user.is_authenticated or not hasattr(user, "_meta"):
         return None
     return user
+
+
+def explicit_estate():
+    """The estate set with use_estate(), if any (simulators and background jobs)."""
+    return _override.get()
+
+
+def in_sandbox():
+    """True while working for a sandbox estate: nothing may be sent for real."""
+    estate = current_estate()
+    return estate is not None and estate is not ALL and getattr(estate, "sandbox", False)

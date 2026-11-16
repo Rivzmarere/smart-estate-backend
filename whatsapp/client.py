@@ -39,6 +39,10 @@ def _cut(text, limit):
 
 def _send(wa_id, payload):
     body = {"messaging_product": "whatsapp", "recipient_type": "individual", "to": wa_id, **payload}
+    from estates.sandbox import capture, whatsapp_text
+
+    if capture("whatsapp", wa_id, whatsapp_text(body), body):
+        return True
     if settings.WHATSAPP_DRY_RUN:
         OUTBOX.append(body)
         MessageLog.objects.create(wa_id=wa_id, direction=MessageLog.OUTBOUND, payload=body)

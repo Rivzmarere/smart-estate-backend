@@ -54,6 +54,10 @@ class Conversation(EstateScoped):
     address = models.CharField(max_length=200)
     resident_name = models.CharField(max_length=130, blank=True)
     wa_id = models.CharField(max_length=32, db_index=True)
+    WHATSAPP = "whatsapp"
+    PORTAL = "portal"
+    CHANNELS = [(WHATSAPP, "WhatsApp"), (PORTAL, "Residents' portal")]
+    channel = models.CharField(max_length=10, choices=CHANNELS, default=WHATSAPP)
     status = models.CharField(max_length=6, choices=STATUSES, default=OPEN)
     unread = models.PositiveIntegerField(default=0, help_text="Resident messages the office has not opened yet")
     last_message_at = models.DateTimeField(null=True, blank=True)

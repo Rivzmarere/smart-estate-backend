@@ -152,3 +152,37 @@ settings); otherwise the server-wide `PAYNOW_*` settings are used.
   of silence from the resident that needs the
   `WHATSAPP_TEMPLATE_OFFICE_MESSAGE` template, otherwise the office is
   told to phone them.
+
+## Residents' portal (sign-in) and household
+
+Residents sign in to the portal with their mobile number and a 6-digit
+code (WhatsApp if they wrote recently, otherwise SMS; only a hash is kept,
+codes expire in 10 minutes, 5 tries). The token works only on `/resident/...`
+endpoints and is tied to one estate.
+
+A number can belong to a home as its **owner**, its **main resident**
+(tenant or owner living there) or a **household member** (family, domestic
+worker, co-tenant). What each may do is in `portal/access.py`:
+
+| | Owner | Main resident | Member | Member (no bookings) |
+| --- | --- | --- | --- | --- |
+| Visitors, walk-ins | ✓ | ✓ | ✓ | |
+| Repairs, emergency, office chat | ✓ | ✓ | ✓ | ✓ |
+| Levy and payments | ✓ | ✓ | | |
+| Add / remove household members | ✓ | ✓ | | |
+| New tenant / tenant moving out | ✓ | | | |
+
+The same rules apply on WhatsApp, USSD and the public booking form.
+Household changes wait for the office (Back office > Inbox > Household)
+when the estate's *household approval* setting is on (the default);
+removing someone always takes effect at once.
+
+## USSD (*xxx#)
+
+Book a visitor, see visitors, levy balance and EcoCash payment, report a
+fault, and emergency, on any phone. Get a USSD short code from the mobile
+networks or an aggregator, set `USSD_SECRET`, and give the gateway
+`https://API_DOMAIN/ussd/<USSD_SECRET>` as the callback. The endpoint takes
+the common format (`sessionId`, `serviceCode`, `phoneNumber`, `text` with
+answers joined by `*`; reply `CON ...` / `END ...`); a gateway with another
+format needs a small adapter around `ussd.menu.handle()`.

@@ -17,7 +17,7 @@ class EstateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Estate
         fields = [
-            "id", "name", "slug", "active", "address", "office_phone", "office_hours", "emergency_phones",
+            "id", "name", "slug", "active", "address", "office_phone", "office_hours", "emergency_phones", "household_approval",
             "paynow_usd_integration_id", "paynow_usd_integration_key", "paynow_zwg_integration_id",
             "paynow_zwg_integration_key", "paynow_auth_email", "paynow_usd_ready", "paynow_zwg_ready",
             "homes", "staff", "created_at",

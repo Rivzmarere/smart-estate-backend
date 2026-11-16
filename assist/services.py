@@ -70,14 +70,14 @@ def local(wa_id):
 
 # ---------------------------------------------------------------- office chat
 
-def open_conversation(home, wa_id):
+def open_conversation(home, wa_id, channel=Conversation.WHATSAPP):
     """The resident's open conversation, or a new one. Returns (conversation, created)."""
-    conversation = Conversation.objects.filter(home=home, wa_id=wa_id, status=Conversation.OPEN).first()
+    conversation = Conversation.objects.filter(home=home, wa_id=wa_id, status=Conversation.OPEN, channel=channel).first()
     if conversation:
         return conversation, False
     conversation = Conversation.objects.create(
         home=home, stand_number=home.stand.stand_number, address=home.address, resident_name=resident_name(home),
-        wa_id=wa_id, last_message_at=timezone.now(),
+        wa_id=wa_id, last_message_at=timezone.now(), channel=channel,
     )
     office = home.estate.office_phone
     if office:
@@ -92,8 +92,11 @@ def record_resident_message(conversation, text):
 
 def office_reply(conversation, text, user):
     """Send the office's reply on WhatsApp. Returns the message (delivered tells whether WhatsApp took it)."""
-    template = getattr(settings, "WHATSAPP_TEMPLATE_OFFICE_MESSAGE", "")
-    delivered = notify(conversation.wa_id, f"🏢 *{conversation.home.estate.name} office:* {text}", template, [text[:1000]])
+    if conversation.channel == Conversation.PORTAL:
+        delivered = True  # the resident reads it in the portal
+    else:
+        template = getattr(settings, "WHATSAPP_TEMPLATE_OFFICE_MESSAGE", "")
+        delivered = notify(conversation.wa_id, f"🏢 *{conversation.home.estate.name} office:* {text}", template, [text[:1000]])
     message = ConversationMessage.objects.create(
         conversation=conversation, direction=ConversationMessage.FROM_OFFICE, text=text[:4000], sent_by=user, delivered=delivered,
     )
@@ -101,8 +104,9 @@ def office_reply(conversation, text, user):
     if conversation.status == Conversation.CLOSED:
         conversation.status, conversation.closed_at, conversation.closed_by = Conversation.OPEN, None, None
     conversation.save(update_fields=["last_message_at", "status", "closed_at", "closed_by"])
-    # The resident's next message should reach the office, not the menu.
-    WhatsAppSession.objects.filter(wa_id=conversation.wa_id).update(state=HANDOFF_STATE, data={"conversation_id": conversation.pk})
+    # The resident's next WhatsApp message should reach the office, not the menu.
+    if conversation.channel == Conversation.WHATSAPP:
+        WhatsAppSession.objects.filter(wa_id=conversation.wa_id).update(state=HANDOFF_STATE, data={"conversation_id": conversation.pk})
     return message
 
 
@@ -111,6 +115,8 @@ def close_conversation(conversation, user):
     conversation.closed_at = timezone.now()
     conversation.closed_by = user
     conversation.save(update_fields=["status", "closed_at", "closed_by"])
+    if conversation.channel != Conversation.WHATSAPP:
+        return
     session = WhatsAppSession.objects.filter(wa_id=conversation.wa_id).first()
     if session and session.state == HANDOFF_STATE and session.data.get("conversation_id") == conversation.pk:
         session.state, session.data = "menu", {}

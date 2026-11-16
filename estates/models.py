@@ -27,6 +27,10 @@ class Estate(models.Model):
     emergency_phones = models.CharField(
         max_length=200, blank=True, help_text="Comma-separated mobile numbers SMSed when a resident raises an emergency (security control room, manager)"
     )
+    # Residents' portal
+    household_approval = models.BooleanField(
+        default=True, help_text="Household changes from the portal (new tenant, new member) wait for the office to approve"
+    )
     # Paynow (blank = use the server-wide settings)
     paynow_usd_integration_id = models.CharField(max_length=20, blank=True)
     paynow_usd_integration_key = models.CharField(max_length=80, blank=True)

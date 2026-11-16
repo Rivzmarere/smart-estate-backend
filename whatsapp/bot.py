@@ -14,7 +14,6 @@ from datetime import timedelta
 from decimal import Decimal, InvalidOperation
 
 from django.core.files.base import ContentFile
-from django.db.models import Q
 from django.utils import timezone
 
 from assist import services as assist
@@ -28,18 +27,16 @@ from levy.accounts import account, fmt_usd, fmt_zig, in_zig
 from levy.models import Payment
 from levy.services import pending_payment, start_payment
 from notice.models import Notice
-from home.models import Home
 from parameters.models.models_complaint_category import ComplaintCategory
 from parameters.models.models_complaint_status import ComplaintStatus
 from parameters.models.models_provider_category import ProviderCategory
 from provider.models import Provider
 from parameters.models.models_transport_type import TransportType
 from parameters.models.models_visit_status import VisitStatus
-from resident.models import Resident
 from visit.models import Visit
 from sms.sender import zimbabwe_mobile
 from visit.messaging import send_code_to_visitor
-from visit.utilities import phone_variants, random_numbers
+from visit.utilities import random_numbers
 
 from . import client
 from .models import WhatsAppSession
@@ -83,24 +80,16 @@ MAX_PAYMENT = Decimal("10000.00")
 # ---------------------------------------------------------------- lookups
 
 def find_homes(wa_id):
-    """Active homes whose resident owns this WhatsApp number (a person may have more than one)."""
-    # WhatsApp has one number for every estate, so look across all of them.
-    variants = phone_variants(wa_id)
-    if not variants:
-        return Home.all_estates.none()
-    phone_match = Q()
-    for field in ("phone_number1", "phone_number2", "phone_number3", "phone_number4"):
-        phone_match |= Q(**{f"{field}__in": variants})
-    residents = Resident.all_estates.filter(phone_match, status=True)
-    return (
-        Home.all_estates.filter(resident__in=residents, status=True, estate__active=True)
-        .select_related("resident", "stand", "estate").order_by("id")
-    )
+    """Active homes this number belongs to (as resident, household member or owner), in any estate."""
+    from portal.access import homes_for_phone
+
+    return [access.home for access in homes_for_phone(wa_id, across_estates=True)]
 
 
 def find_home(wa_id):
     """The home the bot works with for this number (the first, if there are several), or None."""
-    return find_homes(wa_id).first()
+    homes = find_homes(wa_id)
+    return homes[0] if homes else None
 
 
 def local_phone(wa_id):
@@ -572,6 +561,11 @@ def answer_walk_in(session, home, choice):
 # ---------------------------------------------------------------- levy
 
 def show_levy(session, home):
+    from portal.access import access_to
+
+    access = access_to(home, session.wa_id)
+    if access is None or not access.can("levy"):
+        return show_menu(session, home, intro="Only the home's owner and main resident can see the levy account. What would you like to do?")
     acc = account(home)
     balance = acc["balance"]
     if balance <= 0:

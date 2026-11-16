@@ -41,4 +41,6 @@ urlpatterns = [
     path('', include('levy.url')),
     path('', include('gatepass.url')),
     path('', include('assist.url')),
+    path('', include('portal.url')),
+    path('', include('ussd.url')),
 ]

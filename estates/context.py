@@ -101,4 +101,7 @@ def current_user():
     """The logged-in user of the current request, or None."""
     request = _request.get()
     user = getattr(request, "user", None) if request is not None else None
-    return user if user is not None and user.is_authenticated else None
+    # Staff accounts only: a resident signed in to the portal is not a User.
+    if user is None or not user.is_authenticated or not hasattr(user, "_meta"):
+        return None
+    return user

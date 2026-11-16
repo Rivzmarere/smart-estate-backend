@@ -86,7 +86,7 @@ def conversation_row(c):
     last = c.messages.order_by("-created_at").first()
     return {
         "id": c.id, "stand_number": c.stand_number, "address": c.address, "resident_name": c.resident_name,
-        "phone": AlertSerializer().get_phone(c), "status": c.status, "unread": c.unread,
+        "phone": AlertSerializer().get_phone(c), "status": c.status, "unread": c.unread, "channel": c.channel,
         "last_message_at": c.last_message_at, "created_at": c.created_at,
         "last_message": {"text": last.text[:120], "direction": last.direction} if last else None,
     }

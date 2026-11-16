@@ -71,6 +71,8 @@ INSTALLED_APPS = [
     "levy",
     "gatepass",
     "assist",
+    "portal",
+    "ussd",
 ]
 
 MIDDLEWARE = [
@@ -205,6 +207,9 @@ SMS_BACKEND = os.environ.get("SMS_BACKEND", "console")
 SMS_SENDER = os.environ.get("SMS_SENDER", "")
 TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID", "")
 TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN", "")
+
+# USSD (*xxx#): the gateway calls PUBLIC_API_URL/ussd/<USSD_SECRET>. Empty = off.
+USSD_SECRET = os.environ.get("USSD_SECRET", "")
 
 # Where this API and the resident portal are reachable from the internet
 # (Paynow posts payment results to PUBLIC_API_URL).

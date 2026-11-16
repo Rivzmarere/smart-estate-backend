@@ -5,8 +5,6 @@ Helpers shared by visitor bookings, whitelist guests and complaints.
 import re
 import secrets
 
-from django.db.models import Q
-
 from home.models import Home
 
 # No 0/O or 1/I, so codes are easy to read out at the gate.
@@ -37,26 +35,14 @@ def phone_variants(phone_number):
     return {raw, digits, "0" + local, "263" + local, "+263" + local}
 
 
-def _resident_phone_query(phone_number):
-    variants = phone_variants(phone_number)
-    query = Q()
-    for field in ("phone_number1", "phone_number2", "phone_number3", "phone_number4"):
-        query |= Q(**{f"resident__{field}__in": variants})
-    return query
-
-
-def search_auth(stand, phone_number):
+def search_auth(stand, phone_number, action="visitors"):
     """
-    True only if the phone number belongs to the resident of a home on this stand.
-    (Previously any resident's number unlocked every stand.)
+    True only if this phone number belongs to a home on this stand (as its
+    resident, a household member or its owner) and may do this there.
     """
-    if not phone_variants(phone_number):
-        return False
-    return (
-        Home.objects.filter(stand__stand_number=stand, status=True, resident__isnull=False)
-        .filter(_resident_phone_query(phone_number))
-        .exists()
-    )
+    from portal.access import homes_for_phone
+
+    return any(a.home.stand.stand_number == int(stand) for a in homes_for_phone(phone_number, action=action))
 
 
 def search_home(stand):

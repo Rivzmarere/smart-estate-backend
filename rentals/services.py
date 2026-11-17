@@ -74,10 +74,13 @@ def bill_lease(lease, period, user=None, amount=None):
     if amount <= 0:
         return None
     due = max(period.replace(day=lease.due_day), lease.start_date)
+    # Rent for a month already started (a late or catch-up bill) is dated from that month,
+    # so the tenant's statement reads in order. Rent billed ahead is dated the day it is billed.
+    issued = min(timezone.localdate(), max(period, lease.start_date))
     return Invoice.objects.create(
         home=lease.home, lease=lease, stand_number=lease.home.stand.stand_number, address=lease.home.address,
         kind=Invoice.RENT, period=period, description=f"Rent for {period:%B %Y}", amount_usd=money(amount),
-        due_date=due, created_by=user,
+        issued_on=issued, due_date=due, created_by=user,
     )
 
 

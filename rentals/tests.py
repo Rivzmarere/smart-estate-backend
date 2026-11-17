@@ -88,6 +88,15 @@ class OrganisationTests(RentalFixture):
         self.assertEqual(Home.all_estates.filter(estate=theirs).count(), 1)
         self.assertEqual(self.api("get", "/levies/accounts", slug="main").json()["accounts"], [])
 
+    def test_workspace_follows_the_chosen_estate(self):
+        self.client.post("/organisation/estates", {"name": "Msasa Park", "kind": "estate"}, format="json")
+        nothing_chosen = self.client.get("/estate/context").json()
+        self.assertIsNone(nothing_chosen["estate"])
+        self.assertEqual(len(nothing_chosen["estates"]), 2)
+        chosen = self.api("get", "/estate/context").json()
+        self.assertEqual((chosen["estate"]["slug"], chosen["estate"]["kind"]), (self.slug, "rental"))
+        self.assertEqual(chosen["organisation"]["name"], "Kopje Property Managers")
+
     def test_only_platform_staff_manage_organisations(self):
         self.assertEqual(self.client.get("/organisations").status_code, 403)
         self.assertEqual(self.client.get("/estates").status_code, 403)
@@ -150,6 +159,17 @@ class LeaseTests(RentalFixture):
         again = self.api("post", "/rentals/leases", {"home": home, "tenant_name": "A", "tenant_surname": "B", "tenant_phone": "0774555222",
                                                      "start_date": self.today.isoformat(), "rent_usd": "300"})
         self.assertEqual(again.status_code, 400)
+
+    def test_catch_up_rent_is_dated_from_its_month(self):
+        start = services.month_start(services.month_start(self.today) - datetime.timedelta(days=40))
+        lease = self.start_lease(self.add_property(), start=start, first_rent_usd="0")
+        with use_estate(self.portfolio):
+            invoice = services.bill_lease(Lease.objects.get(pk=lease["id"]), start)
+        self.assertEqual(invoice.issued_on, start)
+        ahead = services.next_month(self.today)
+        with use_estate(self.portfolio):
+            later = services.bill_lease(Lease.objects.get(pk=lease["id"]), ahead)
+        self.assertEqual(later.issued_on, self.today)
 
     def test_part_month_and_billing_run(self):
         home = self.add_property()

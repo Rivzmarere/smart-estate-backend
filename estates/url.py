@@ -10,6 +10,7 @@ urlpatterns = [
     path("estates/<int:id>/admin", EstateFirstAdmin.as_view()),
     path("estate", MyEstate.as_view()),
     path("estate/public", PublicEstate.as_view()),
+    path("estate/context", org.Workspace.as_view()),
     # Managing agents and landlords
     path("organisations", org.Organisations.as_view()),
     path("organisations/<int:id>", org.OrganisationDetail.as_view()),

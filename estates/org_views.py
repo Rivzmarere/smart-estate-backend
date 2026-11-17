@@ -242,3 +242,35 @@ class Staff(APIView):
             first_name=data.get("first_name", ""), last_name=data.get("last_name", ""),
         )
         return Response({"id": user.id, "username": user.username, "role": user.role, "estate": estate.name if estate else None}, status=201)
+
+
+class Workspace(APIView):
+    """
+    What the back office shows for whoever is logged in: the estate they are
+    working in (which decides the menu: gate and levies, or rent and leases),
+    and the estates they may switch between.
+    """
+
+    def get_permissions(self):
+        from smartEstateBackend.permissions import IsAdminOrGuard
+
+        return [IsAdminOrGuard()]
+
+    def get(self, request):
+        from .context import ALL, current_estate
+
+        user = request.user
+        estate = current_estate()
+        organisation = user.organisation if user.spans_organisation else None
+        if is_platform(user):
+            choices = Estate.objects.filter(active=True)
+        elif organisation:
+            choices = organisation.estates.filter(active=True)
+        else:
+            choices = None
+        return Response({
+            "estate": None if estate is None or estate is ALL else estate_row(estate),
+            "estates": None if choices is None else [estate_row(e) for e in choices],
+            "organisation": {"name": organisation.name, "kind": organisation.kind} if organisation else None,
+            "platform": is_platform(user),
+        })

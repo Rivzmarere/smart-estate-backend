@@ -179,3 +179,39 @@ It returns 200 when the API and database are working. Logs:
 ```bash
 docker compose -f docker-compose.prod.yml logs -f api
 ```
+
+## Appendix: sharing a server that already runs nginx
+
+Used when the server already hosts other websites on ports 80 and 443 and is
+too small for Docker (e.g. 1 CPU, 2 GB). nginx stays in charge; nothing else
+on the server changes.
+
+| Part | Where |
+| --- | --- |
+| Code | `/srv/smart-estate/backend` (branch `phase-7`), owned by the `smartestate` user |
+| Settings | `/srv/smart-estate/backend.env` (readable only by `smartestate`) |
+| Database | PostgreSQL on the server, database and user `smartestate` |
+| API | `smart-estate-api` service: gunicorn on `127.0.0.1:8001` |
+| Jobs | `smart-estate-paynow-poll`, `smart-estate-rent-run`, `smart-estate-backup` timers |
+| Backups | `/srv/smart-estate/backups`, nightly at 02:00, 14 days kept |
+| Web apps | `/var/www/smart-estate/admin` and `/var/www/smart-estate/portal` (built elsewhere, uploaded) |
+| nginx | `/etc/nginx/sites-available/smart-estate-{api,admin,portal}`, certificates by certbot |
+| Memory | 1 GB swap at `/swapfile` |
+
+Update the API:
+
+```bash
+cd /srv/smart-estate/backend && sudo -u smartestate git pull
+run() { sudo -u smartestate env $(sudo cat /srv/smart-estate/backend.env | xargs) /srv/smart-estate/venv/bin/python manage.py "$@"; }
+sudo -u smartestate /srv/smart-estate/venv/bin/pip install -q -r requirements.txt
+run migrate --noinput && run collectstatic --noinput
+sudo systemctl restart smart-estate-api
+```
+
+Update the web apps: build them on a computer (in `smart-estate-frontend`,
+set `https://api.<domain>/` in both `environment.prod.ts` files, run
+`npx nx run-many -t build -p smart-estate-back-office smart-estate-front-office --configuration=production`,
+then put the files back), upload `dist/apps/...` to the server and copy them
+into `/var/www/smart-estate/admin` and `/var/www/smart-estate/portal`.
+
+Logs: `journalctl -u smart-estate-api -f`.

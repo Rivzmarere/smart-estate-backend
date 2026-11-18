@@ -8,6 +8,7 @@ One server runs everything with Docker Compose:
 | `api` | Django + gunicorn (runs database migrations on start) |
 | `db` | PostgreSQL 17 |
 | `paynow-poller` | Checks Paynow every 2 minutes for payments whose result did not arrive |
+| `rent-run` | Rental portfolios: bills each month's rent a week ahead and sends rent reminders (every 6 hours; nothing is billed or sent twice) |
 | `backup` | Database dump and photo archive at start-up and every night |
 
 Run a **staging** copy first (its own server or subdomains, Paynow in test
@@ -36,12 +37,16 @@ Certificates are issued automatically on first start once DNS resolves.
 ## 3. Code and settings
 
 ```bash
-git clone https://github.com/Rivzmarere/smart-estate-backend.git
-git clone https://github.com/Rivzmarere/smart-estate-frontend.git   # must sit next to the backend
+git clone -b phase-7 https://github.com/Rivzmarere/smart-estate-backend.git
+git clone -b phase-7 https://github.com/Rivzmarere/smart-estate-frontend.git   # must sit next to the backend
 cd smart-estate-backend
 cp .env.example .env
 nano .env
 ```
+
+Until the work is merged into `main`, use the `phase-7` branch of **both**
+repositories, as above: `main` does not have the estates, rentals, portal or
+sandbox features yet.
 
 In `.env` set at least the three domains, `ACME_EMAIL`, a new
 `DJANGO_SECRET_KEY`, the database password (in both `POSTGRES_PASSWORD` and
@@ -104,6 +109,28 @@ first estate if needed, add estates, and create each estate's first
 administrator. That administrator adds guards under **Users** and fills in
 **Estate settings** (office phone, emergency numbers, Paynow).
 
+**Managing agents and landlords:** on the Estates page, tab *Agents and
+landlords*, create the customer and their login. They then add their own
+estates and rental portfolios, properties, tenants and staff themselves.
+
+### Demo data to look around or give to testers
+
+Sandbox estates hold sample data. Nothing in them is really sent (messages go
+to an Outbox you can read) and EcoCash payments are simulated, so they are
+safe on a live server.
+
+```bash
+# A managing agent with a gated estate and a rental portfolio, and one login for both
+docker compose -f docker-compose.prod.yml exec api python manage.py sandbox agent "Demo Agents"
+# Or one of each on its own
+docker compose -f docker-compose.prod.yml exec api python manage.py sandbox create "Sandbox Estate"
+docker compose -f docker-compose.prod.yml exec api python manage.py sandbox create "Sandbox Rentals" --kind rental
+```
+
+Each command prints the logins. The portal link for a sandbox is
+`https://residents.../?estate=<its slug>`. The same can be done from the
+Estates page (*New sandbox*).
+
 ## 7. Connect the outside services
 
 - **WhatsApp** (Meta app dashboard > WhatsApp > Configuration): callback URL
@@ -137,7 +164,7 @@ Try a restore on staging once, before you need it.
 ## 9. Updates
 
 ```bash
-cd smart-estate-backend && git pull && cd ../smart-estate-frontend && git pull && cd ../smart-estate-backend
+cd smart-estate-backend && git pull && cd ../smart-estate-frontend && git pull && cd ../smart-estate-backend   # same branch in both
 docker compose -f docker-compose.prod.yml up -d --build
 ```
 

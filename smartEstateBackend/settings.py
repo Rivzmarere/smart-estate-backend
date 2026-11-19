@@ -68,6 +68,7 @@ INSTALLED_APPS = [
     "sms",
     "notice",
     "reports",
+    "dashboard",
     "levy",
     "gatepass",
     "assist",

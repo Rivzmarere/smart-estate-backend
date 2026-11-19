@@ -61,7 +61,11 @@ class Invoice(EstateScoped):
     PENALTY = "penalty"
     OTHER = "other"
     RENT = "rent"
-    KINDS = [(LEVY, "Monthly levy"), (SPECIAL, "Special levy"), (PENALTY, "Penalty"), (RENT, "Rent"), (OTHER, "Other")]
+    OPENING = "opening"
+    KINDS = [
+        (LEVY, "Monthly levy"), (SPECIAL, "Special levy"), (PENALTY, "Penalty"), (RENT, "Rent"),
+        (OPENING, "Balance brought forward"), (OTHER, "Other"),
+    ]
 
     number = models.CharField(max_length=20, unique=True, null=True, blank=True)
     home = models.ForeignKey(Home, on_delete=models.PROTECT, related_name="invoices")
@@ -118,6 +122,7 @@ class Payment(EstateScoped):
     INNBUCKS = "innbucks"
     CARD = "card"
     DEPOSIT = "deposit"
+    OPENING = "opening"
     METHODS = [
         (CASH, "Cash"),
         (BANK, "Bank transfer"),
@@ -126,8 +131,11 @@ class Payment(EstateScoped):
         (INNBUCKS, "InnBucks"),
         (CARD, "Card"),
         (DEPOSIT, "From the deposit"),
+        (OPENING, "Credit brought forward"),
     ]
     MOBILE_METHODS = {ECOCASH, ONEMONEY, INNBUCKS}
+    # Not money received: a credit carried over from the estate's old records when it was imported.
+    NOT_RECEIVED = {OPENING}
 
     PENDING = "pending"
     PAID = "paid"

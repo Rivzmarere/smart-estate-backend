@@ -229,6 +229,7 @@ def collected_between(start, end):
     begin, finish = _period_bounds(start, end)
     return dict(
         Payment.objects.filter(status=Payment.PAID, paid_at__gte=begin, paid_at__lt=finish)
+        .exclude(method__in=Payment.NOT_RECEIVED)
         .values_list("home_id").annotate(total=Sum("amount_usd")).values_list("home_id", "total")
     )
 
@@ -255,7 +256,7 @@ def rent_roll(today=None):
         .values_list("lease_id").annotate(total=Sum("amount_usd"), last=Max("paid_at")).values_list("lease_id", "total")
     )
     last_paid = dict(
-        Payment.objects.filter(status=Payment.PAID, lease__status=Lease.ACTIVE)
+        Payment.objects.filter(status=Payment.PAID, lease__status=Lease.ACTIVE).exclude(method__in=Payment.NOT_RECEIVED)
         .values_list("lease_id").annotate(last=Max("paid_at")).values_list("lease_id", "last")
     )
     month = collected_between(month_start(today), month_end(today))

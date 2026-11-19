@@ -111,6 +111,11 @@ class PaymentSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("The amount must be more than zero.")
         return value
 
+    def validate_method(self, value):
+        if value in Payment.NOT_RECEIVED:
+            raise serializers.ValidationError("Credit brought forward is only added by an import.")
+        return value
+
     def validate(self, attrs):
         from .accounts import to_usd
 

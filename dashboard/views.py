@@ -55,7 +55,8 @@ def collected_by_month(today, months=MONTHS):
     rows, month = [], first
     while month <= today:
         begin, finish = _period_bounds(month, next_month(month) - datetime.timedelta(days=1))
-        total = Payment.objects.filter(status=Payment.PAID, paid_at__gte=begin, paid_at__lt=finish).aggregate(t=Sum("amount_usd"))["t"]
+        total = Payment.objects.filter(status=Payment.PAID, paid_at__gte=begin, paid_at__lt=finish).exclude(
+            method__in=Payment.NOT_RECEIVED).aggregate(t=Sum("amount_usd"))["t"]
         rows.append({"month": month.isoformat()[:7], "amount": total or ZERO})
         month = next_month(month)
     return rows

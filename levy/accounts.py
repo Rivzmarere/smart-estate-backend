@@ -76,7 +76,7 @@ def all_accounts(today=None):
         Payment.objects.filter(status=Payment.PAID).values_list("home_id").annotate(total=Sum("amount_usd")).values_list("home_id", "total")
     )
     last_paid = {}
-    for home_id, when in Payment.objects.filter(status=Payment.PAID).order_by("home_id", "-paid_at").values_list("home_id", "paid_at"):
+    for home_id, when in Payment.objects.filter(status=Payment.PAID).exclude(method__in=Payment.NOT_RECEIVED).order_by("home_id", "-paid_at").values_list("home_id", "paid_at"):
         last_paid.setdefault(home_id, when)
 
     rows = []

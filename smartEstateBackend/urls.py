@@ -45,4 +45,5 @@ urlpatterns = [
     path('', include('ussd.url')),
     path('', include('rentals.url')),
     path('', include('dashboard.url')),
+    path('', include('imports.url')),
 ]

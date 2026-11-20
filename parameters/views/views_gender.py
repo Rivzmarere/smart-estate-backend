@@ -29,7 +29,7 @@ class GenderPaginated(GenericAPIView):
     def get(self, request, format=None):
         sort = 'asc'
         page = int(request.GET.get('page',1))
-        per_page = 5
+        per_page = 20
         status_filter = request.GET.get('status')
         search = request.GET.get('search')
         gender = Gender.objects.all()

@@ -1,3 +1,4 @@
+from smartEstateBackend.listing import flag, number, page, param, search
 import math
 from .models import Resident
 from .serializer import ResidentReadSerializer, ResidentWriteSerializer
@@ -28,32 +29,14 @@ class ResidentPaginated(GenericAPIView):
     permission_classes = [StaffReadAdminWrite]
     serializer_class = ResidentReadSerializer
     def get(self, request, format=None):
-        sort = 'asc'
-        page = int(request.GET.get('page',1))
-        search = request.GET.get('search')
-        status_filter = request.GET.get('status')
-        per_page = 5
+        residents = Resident.objects.all().order_by("surname", "name", "id")
+        if param(request, "search"):
+            residents = search(residents, param(request, "search"), ["name", "surname", "id_number", "phone_number1", "phone_number2", "email"])
+        active = flag(param(request, "status"))
+        if active is not None:
+            residents = residents.filter(status=active)
+        return page(request, residents, ResidentReadSerializer)
 
-        residents = Resident.objects.all()
-        if search:
-            residents = residents.filter(Q(name__icontains = search) | Q(surname__icontains = search) | Q(id_number__icontains = search))
-        
-        if status_filter:
-            residents = residents.filter(status = status_filter)
-            
-        
-        total = residents.count()
-        start = (page - 1) * per_page
-        end = page * per_page
-
-        serializer = ResidentReadSerializer(residents[start:end], many=True)
-        return Response({
-            'data':serializer.data,
-            'total': total,
-            'page':page,
-            'last_page':math.ceil(total / per_page)
-
-        })
 
 
 class ResidentDetails(GenericAPIView):

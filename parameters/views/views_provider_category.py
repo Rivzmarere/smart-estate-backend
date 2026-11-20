@@ -31,7 +31,7 @@ class ProviderCategoryPaginated(GenericAPIView):
         page = int(request.GET.get('page',1))
         status_filter = request.GET.get('status')
         search = request.GET.get('search')
-        per_page = 5
+        per_page = 20
 
         provider_category = ProviderCategory.objects.all()
         

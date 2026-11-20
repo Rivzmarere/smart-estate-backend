@@ -1,3 +1,4 @@
+from smartEstateBackend.listing import flag, number, page, param, search
 import math
 from rest_framework import  status
 from rest_framework.generics import GenericAPIView
@@ -11,7 +12,7 @@ from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.throttling import ScopedRateThrottle
-from .serializer import ChangePasswordSerializer, SignUpSerializer,ReadUserSerializer,UpdateUserSerializer
+from .serializer import SignUpSerializer, ReadUserSerializer
 
 from django.shortcuts import get_object_or_404
 from datetime import timedelta
@@ -65,25 +66,15 @@ class AllUserPaginated(GenericAPIView):
     permission_classes = [IsAdminRole]
     serializer_class = ReadUserSerializer 
     def get(self, request, format=None):
-        sort = request.GET.get('sort')
-        page = int(request.GET.get('page',1))
-        per_page = 9
-        users = estate_users()
-        if sort =='asc':
-            users = users.order_by('date_joined')
-        
-        total = users.count()
-        start = (page - 1) * per_page
-        end = page * per_page
+        users = estate_users().order_by("first_name", "last_name", "username")
+        if param(request, "search"):
+            users = search(users, param(request, "search"), ["username", "first_name", "last_name", "role"])
+        active = flag(param(request, "status"))
+        if active is not None:
+            users = users.filter(is_active=active)
+        return page(request, users, ReadUserSerializer)
 
-        serializer = ReadUserSerializer(users[start:end], many=True)
-        return Response({
-            'data':serializer.data,
-            'total': total,
-            'page':page,
-            'last_page':math.ceil(total / per_page)
 
-        })
 
 class UserDetails(GenericAPIView):
     permission_classes = [IsAdminRole]
@@ -144,99 +135,70 @@ class MyTokenObtainPairView(TokenObtainPairView):
     throttle_scope = "login"
 
 
-class ChangePasswordView(GenericAPIView):
-        """
-        An endpoint for changing password.
-        """
-        serializer_class = ChangePasswordSerializer
-        model = User
-        permission_classes = (IsAuthenticated,)
+# ---------------------------------------------------------------- my account
 
-        def get_object(self, id):
-            if int(id) == self.request.user.pk:
-                return self.request.user
-            return get_object_or_404(estate_users(), pk=id)
+def account_row(user):
+    role = "Platform" if user.is_superuser and not user.estate_id else user.role
+    return {
+        "id": user.id, "username": user.username, "first_name": user.first_name, "last_name": user.last_name,
+        "email": user.email, "role": role,
+        "estate": user.estate.name if user.estate_id else "",
+        "organisation": user.organisation.name if user.organisation_id else "",
+        "date_joined": user.date_joined, "last_login": user.last_login,
+    }
 
-        def put(self, request, id, *args, **kwargs):
-            self.object = self.get_object(id)
-            # Users may change only their own password; admins may change anyone's.
-            if self.object.pk != request.user.pk and not is_admin(request.user):
-                return Response({"errors": "You can only change your own password."}, status=status.HTTP_403_FORBIDDEN)
-            serializer = self.get_serializer(data=request.data)
-            if not serializer.is_valid():
-                return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-            if not self.object.check_password(serializer.data.get("old_password")):
-                return Response({"old_password": "Wrong password. Old Password"}, status=status.HTTP_400_BAD_REQUEST)
-            new_password = serializer.data.get("new_password")
+
+class MyAccount(GenericAPIView):
+    """GET my own account; PUT changes my name and email (not my username or role)."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        return Response(account_row(request.user))
+
+    def put(self, request):
+        from django.core.validators import validate_email
+
+        user = request.user
+        errors = {}
+        first = str(request.data.get("first_name", user.first_name)).strip()[:150]
+        last = str(request.data.get("last_name", user.last_name)).strip()[:150]
+        email = str(request.data.get("email", user.email) or "").strip().lower()
+        if not first:
+            errors["first_name"] = "Type your first name."
+        if email:
             try:
-                validate_password(new_password, user=self.object)
-            except DjangoValidationError as exc:
-                return Response({"new_password": list(exc.messages)}, status=status.HTTP_400_BAD_REQUEST)
-            self.object.set_password(new_password)
-            self.object.save()
-            return Response(
-                {"status": "success", "code": status.HTTP_200_OK, "message": "Password updated successfully"},
-                status=status.HTTP_200_OK,
-            )
+                validate_email(email)
+            except DjangoValidationError:
+                errors["email"] = "That is not an email address."
+        if errors:
+            return Response(errors, status=status.HTTP_400_BAD_REQUEST)
+        user.first_name, user.last_name, user.email = first, last, email
+        user.save(update_fields=["first_name", "last_name", "email"])
+        return Response(account_row(user))
 
 
-# class ResetPassword(GenericAPIView):
-#     @receiver(reset_password_token_created)
-#     def password_reset_token_created(sender, instance, reset_password_token, *args, **kwargs):
-#         # send an e-mail to the user
-#         current_site = '127.0.0.1:8000'
-#         relativeLink = reverse('signUp')
-#         reset_password_url = "{}?token={}".format(
-#             instance.request.build_absolute_uri(reverse('password_reset:reset-password-confirm')),
-#             reset_password_token.key)
-    
-#         absurl = 'http://'+current_site+relativeLink
-#         email_body = 'Hi '+ reset_password_token.user.username +' '+ \
-#             ' Use the link below to verify your email \n' + reset_password_url
-#         data = {'email_body': email_body, 'to_email': reset_password_token.user.email,
-#                 'email_subject': 'Verify your email'}
-#         context = {
-#             'current_user': reset_password_token.user,
-#             'username': reset_password_token.user.username,
-#             'email': reset_password_token.user.email,
-#         }
-#         print(data)
+class MyPassword(GenericAPIView):
+    """POST {old_password, new_password}: change my own password."""
 
-#         # # render email text
-#         # email_plaintext_message = render_to_string('email/user_reset_password.txt', context)
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "login"
 
-#         # msg = EmailMultiAlternatives(
-#         #     # title:
-#         #     "Password Reset for {title}".format(title="Some website title"),
-#         #     # message:
-#         #     email_plaintext_message,
-#         #     # from:
-#         #     "rivaldoTest@outlook.com",
-#         #     # to:
-#         #     [reset_password_token.user.email]
-#         # )
-#         # msg.attach_alternative(email_html_message, "text/html")
-#         # msg.send()
-#         return Response(data=data, status=status.HTTP_200_OK)
-
-class UpdatedUser(GenericAPIView):
-    def validate_email(self, value,id):
-        user = self.context['request'].user
-        if User.objects.exclude(pk=user.pk).filter(email=value).exists():
-            raise UpdateUserSerializer.ValidationError({"email": "This email is already in use."})
-        return value
-
-    def validate_username(self, value):
-        user = self.context['request'].user
-        if User.objects.exclude(pk=user.pk).filter(username=value).exists():
-            raise UpdateUserSerializer.ValidationError({"username": "This username is already in use."})
-        return value
-
-    def update(self, instance, validated_data):
-        instance.first_name = validated_data['first_name']
-        instance.last_name = validated_data['last_name']
-        instance.email = validated_data['email']
-        instance.username = validated_data['username']
-
-        instance.save()
-
+    def post(self, request):
+        user = request.user
+        old = request.data.get("old_password") or ""
+        new = request.data.get("new_password") or ""
+        if not user.check_password(old):
+            return Response({"old_password": "That is not your current password."}, status=status.HTTP_400_BAD_REQUEST)
+        if not new:
+            return Response({"new_password": ["Type a new password."]}, status=status.HTTP_400_BAD_REQUEST)
+        if new == old:
+            return Response({"new_password": ["The new password must be different."]}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            validate_password(new, user=user)
+        except DjangoValidationError as exc:
+            return Response({"new_password": list(exc.messages)}, status=status.HTTP_400_BAD_REQUEST)
+        user.set_password(new)
+        user.save(update_fields=["password"])
+        return Response({"detail": "Password changed."})

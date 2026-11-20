@@ -1,3 +1,4 @@
+from smartEstateBackend.listing import flag, number, page, param, search
 import math
 from .models import Complain
 from .serializer import ComplainReadSerializer, ComplainWriteSerializer,ComplainAssignUpdateSerializer,ComplainUpdateStatusSerializer
@@ -42,26 +43,11 @@ class ComplainPaginated(GenericAPIView):
     permission_classes = [IsAdminOrGuard]
     serializer_class = ComplainReadSerializer
     def get(self, request, format=None):
-        sort = 'asc'
-        page = int(request.GET.get('page',1))
-        per_page = 5
+        complaints = Complain.objects.filter(status=True).select_related("complaint_category", "compalint_status").order_by("-date_created")
+        if param(request, "search"):
+            complaints = search(complaints, param(request, "search"), ["complain_code", "stand_number", "home", "description", "complaint_category__name"])
+        return page(request, complaints, ComplainReadSerializer)
 
-        complains = Complain.objects.all()
-        if sort =='asc':
-            complains = complains.order_by('-date_created')
-        
-        total = complains.count()
-        start = (page - 1) * per_page
-        end = page * per_page
-
-        serializer = ComplainReadSerializer(complains[start:end], many=True)
-        return Response({
-            'data':serializer.data,
-            'total': total,
-            'page':page,
-            'last_page':math.ceil(total / per_page)
-
-        })
 
 
 class ComplainDetails(GenericAPIView):

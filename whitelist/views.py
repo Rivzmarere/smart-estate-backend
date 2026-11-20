@@ -1,3 +1,4 @@
+from smartEstateBackend.listing import flag, number, page, param, search
 import math
 
 from .models import WhiteList,WhiteListGuest
@@ -38,32 +39,11 @@ class WhiteListGuestPaginated(GenericAPIView):
     permission_classes = [IsAdminOrGuard]
     serializer_class = WhiteListGuestReadSerializer
     def get(self, request, format=None):
-        sort = 'asc'
-        page = int(request.GET.get('page',1))
-        search = request.GET.get('search')
-        per_page = 5
+        guests = WhiteListGuest.objects.filter(status=True).order_by("-date_created")
+        if param(request, "search"):
+            guests = search(guests, param(request, "search"), ["visitor_name", "visit_code", "stand_number", "home", "visitor_vehicle_reg_number"])
+        return page(request, guests, WhiteListGuestReadSerializer)
 
-        white_list_guests = WhiteListGuest.objects.all()
-        if search:
-            white_list_guests = white_list_guests.filter(Q(visitor_name__icontains = search) | Q(visit_code__icontains = search))
-        
-            
-        if sort =='asc':
-            white_list_guests = white_list_guests.order_by('-date_created').filter(status=True)
-        
-        
-        total = white_list_guests.count()
-        start = (page - 1) * per_page
-        end = page * per_page
-
-        serializer = WhiteListGuestReadSerializer(white_list_guests[start:end], many=True)
-        return Response({
-            'data':serializer.data,
-            'total': total,
-            'page':page,
-            'last_page':math.ceil(total / per_page)
-
-        })
 
 
 class WhiteListGuestDetails(GenericAPIView):
@@ -96,32 +76,12 @@ class WhiteListPaginated(GenericAPIView):
     permission_classes = [IsAdminOrGuard]
     serializer_class = WhiteListReadSerializer
     def get(self, request, format=None):
-        sort = 'asc'
-        page = int(request.GET.get('page',1))
-        search = request.GET.get('search')
-        per_page = 5
+        visits = WhiteList.objects.filter(status=True).select_related("white_list_guest").order_by("-date_arrived")
+        if param(request, "search"):
+            visits = search(visits, param(request, "search"), ["white_list_guest__visit_code", "white_list_guest__visitor_name", "white_list_guest__stand_number"])
+        return page(request, visits, WhiteListReadSerializer)
 
-        white_list = WhiteList.objects.all()
-        if search:
-            white_list = white_list.filter(white_list_guest__visit_code__icontains = search)
-        
-            
-        if sort =='asc':
-            white_list = white_list.order_by('-date_arrived').filter(status=True)
-        
-        
-        total = white_list.count()
-        start = (page - 1) * per_page
-        end = page * per_page
 
-        serializer = WhiteListReadSerializer(white_list[start:end], many=True)
-        return Response({
-            'data':serializer.data,
-            'total': total,
-            'page':page,
-            'last_page':math.ceil(total / per_page)
-
-        })
 
 class WhiteListBookInDetails(GenericAPIView):
     permission_classes = [IsAdminOrGuard]

@@ -1,3 +1,4 @@
+from smartEstateBackend.listing import flag, number, page, param, search
 import math
 
 from django.utils import timezone
@@ -48,40 +49,17 @@ class VisitPaginated(GenericAPIView):
     permission_classes = [IsAdminOrGuard]
     serializer_class = VisitReadSerializer
     def get(self, request, format=None):
-        sort = 'asc'
-        page = int(request.GET.get('page',1))
-        search = request.GET.get('search')
-        transport_filter = request.GET.get('transport-filter')
-        status_filter = request.GET.get('status-filter')
-        per_page = 5
+        visits = Visit.objects.filter(status=True).order_by("-date_created")
+        if param(request, "search"):
+            visits = search(visits, param(request, "search"), ["visitor_name", "visit_code", "stand_number", "home", "visitor_vehicle_reg_number"])
+        transport = number(param(request, "transport-filter"))
+        if transport:
+            visits = visits.filter(transport_type_id=transport)
+        visit_status = number(param(request, "status-filter"))
+        if visit_status:
+            visits = visits.filter(visit_status_id=visit_status)
+        return page(request, visits, VisitReadSerializer)
 
-        visits = Visit.objects.all()
-        if search:
-            visits = visits.filter(visitor_name__icontains = search)
-        
-        if transport_filter:
-            visits = visits.filter(transport_type = transport_filter)
-            
-        if status_filter:
-            visits = visits.filter(visit_status = status_filter)
-            
-        if sort =='asc':
-            visits = visits.order_by('-date_created').filter(status=True)
-        
-        
-        
-        total = visits.count()
-        start = (page - 1) * per_page
-        end = page * per_page
-
-        serializer = VisitReadSerializer(visits[start:end], many=True)
-        return Response({
-            'data':serializer.data,
-            'total': total,
-            'page':page,
-            'last_page':math.ceil(total / per_page)
-
-        })
 
 
 class VisitDetails(GenericAPIView):

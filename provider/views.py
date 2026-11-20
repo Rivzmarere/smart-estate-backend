@@ -1,3 +1,4 @@
+from smartEstateBackend.listing import flag, number, page, param, search
 import math
 from .models import Provider
 from .serializer import ProviderPublicSerializer, ProviderReadSerializer, ProviderWriteSerializer
@@ -36,29 +37,11 @@ class ProviderPaginated(GenericAPIView):
     def read_serializer(self):
         return ProviderReadSerializer if is_staff_member(self.request.user) else ProviderPublicSerializer
     def get(self, request, format=None):
-        sort = 'asc'
-        page = int(request.GET.get('page',1))
-        search = request.GET.get('search')
-        per_page = 5
+        providers = Provider.objects.all().select_related("provider_category").order_by("-date_created")
+        if param(request, "search"):
+            providers = search(providers, param(request, "search"), ["name", "surname", "provider_category__name", "phone_number1", "address"])
+        return page(request, providers, self.read_serializer())
 
-        providers = Provider.objects.all()
-        if search:
-            providers = providers.filter(Q(name__icontains = search) | Q(surname__icontains = search) | Q(provider_category__name__icontains = search))
-        if sort =='asc':
-            providers = providers.order_by('-date_created')
-        
-        total = providers.count()
-        start = (page - 1) * per_page
-        end = page * per_page
-
-        serializer = self.read_serializer()(providers[start:end], many=True)
-        return Response({
-            'data':serializer.data,
-            'total': total,
-            'page':page,
-            'last_page':math.ceil(total / per_page)
-
-        })
 
 
 class ProviderDetails(GenericAPIView):

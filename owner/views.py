@@ -1,3 +1,4 @@
+from smartEstateBackend.listing import flag, number, page, param, search
 import math
 from .models import Owner
 from .serializer import OwnerReadSerializer, OwnerWriteSerializer
@@ -27,26 +28,14 @@ class OwnerPaginated(GenericAPIView):
     permission_classes = [StaffReadAdminWrite]
     serializer_class = OwnerReadSerializer
     def get(self, request, format=None):
-        sort = 'asc'
-        page = int(request.GET.get('page',1))
-        per_page = 5
+        owners = Owner.objects.all().order_by("surname", "name", "id")
+        if param(request, "search"):
+            owners = search(owners, param(request, "search"), ["name", "surname", "phone_number1", "phone_number2", "email", "id_number"])
+        active = flag(param(request, "status"))
+        if active is not None:
+            owners = owners.filter(status=active)
+        return page(request, owners, OwnerReadSerializer)
 
-        owners = Owner.objects.all()
-        if sort =='asc':
-            owners = owners.order_by('-date_created')
-        
-        total = owners.count()
-        start = (page - 1) * per_page
-        end = page * per_page
-
-        serializer = OwnerReadSerializer(owners[start:end], many=True)
-        return Response({
-            'data':serializer.data,
-            'total': total,
-            'page':page,
-            'last_page':math.ceil(total / per_page)
-
-        })
 
 
 class OwnerDetails(GenericAPIView):

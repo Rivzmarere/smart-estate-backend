@@ -50,25 +50,6 @@ class ReadUserSerializer(serializers.ModelSerializer):
 
 
 
-class ChangePasswordSerializer(serializers.Serializer):
-    model = User
-
-    """
-    Serializer for password change endpoint.
-    """
-    old_password = serializers.CharField(required=True)
-    new_password = serializers.CharField(required=True)
-
-
-class UpdateUserSerializer(serializers.ModelSerializer):
-    email = serializers.EmailField(required=True)
-
-    class Meta:
-        model = User
-        fields = ('username',)
-
-
-
 class UserSummarySerializer(serializers.ModelSerializer):
     """Safe nested representation of a user (never exposes the password hash)."""
 

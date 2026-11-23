@@ -10,6 +10,7 @@ from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from audit.log import name_of, record, usd
 from complaint.models import Complain
 from home.models import Home
 from levy.accounts import in_zig
@@ -74,6 +75,7 @@ class Properties(APIView):
             owner=owner_from(data, request.user), stand=stand, address=data["address"],
             home_status=first_status(HomeStatus, ["Vacant"]), authorized_by=request.user,
         )
+        record("property.added", f"Added property {number}, {home.address} (owner {name_of(home.owner)})", home, area="people")
         return Response({"home_id": home.id, "reference": number, "address": home.address}, status=201)
 
 
@@ -125,6 +127,8 @@ class PropertyDetail(APIView):
                 return Response({"active": "End the lease before removing this property."}, status=400)
             home.status = active
         home.save()
+        record("property.changed", f"Changed property {home.stand.stand_number}, {home.address}" + ("" if home.status else " (removed)"), home, area="people",
+               owner=name_of(home.owner), active=home.status)
         return Response({"home_id": home.id, "address": home.address, "active": home.status})
 
 
@@ -158,6 +162,8 @@ class Leases(APIView):
             lease = services.start_lease(home, tenant, user=request.user, first_rent_usd=data.pop("first_rent_usd", None), **data)
         except services.LeaseError as exc:
             return Response({"detail": str(exc)}, status=400)
+        record("lease.started", f"Started a lease for {name_of(tenant)} at {home.address}, {usd(lease.rent_usd)} a month from {lease.start_date:%d %b %Y}",
+               lease, area="people")
         return Response(LeaseSerializer(lease).data, status=201)
 
 
@@ -204,9 +210,14 @@ class LeaseDetail(APIView):
         lease = self.lease(id)
         if lease.status != Lease.ACTIVE:
             return Response({"detail": "This lease has ended and can no longer be changed."}, status=400)
+        before = {"rent_usd": lease.rent_usd, "end_date": lease.end_date, "due_day": lease.due_day, "deposit_paid_usd": lease.deposit_paid_usd}
         serializer = LeaseSerializer(lease, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save()
+        changed = {k: [str(v), str(getattr(lease, k))] for k, v in before.items() if v != getattr(lease, k)}
+        if changed:
+            record("lease.changed", f"Changed the lease of {name_of(lease.tenant)} at {lease.home.address}: " + ", ".join(
+                f"{k.replace('_usd', '').replace('_', ' ')} {a} to {b}" for k, (a, b) in changed.items()), lease, area="people", changed=changed)
         return Response(serializer.data)
 
 
@@ -226,6 +237,8 @@ class EndLease(APIView):
         except services.LeaseError as exc:
             return Response({"detail": str(exc)}, status=400)
         acc = services.lease_account(lease)
+        record("lease.ended", f"Ended the lease of {name_of(lease.tenant)} at {lease.home.address} on {lease.ended_on:%d %b %Y}"
+               f" (deposit back {usd(lease.deposit_returned_usd)}, kept {usd(lease.deposit_deducted_usd)})", lease, area="people")
         return Response({**LeaseSerializer(lease).data, "balance": acc["balance"]})
 
 
@@ -242,6 +255,8 @@ class LeasePayments(APIView):
             return Response({"method": "Money kept from a deposit is recorded when the lease ends."}, status=400)
         payment = serializer.save(lease=lease, recorded_by=request.user, status=Payment.PENDING, channel=Payment.OFFICE)
         payment.mark_paid()
+        record("payment.recorded", f"Recorded {usd(payment.amount_usd)} {payment.get_method_display()} rent from {name_of(lease.tenant)}, {lease.home.address} (receipt {payment.receipt_number})",
+               payment, area="money", currency=payment.currency, amount=payment.amount, reference=payment.reference)
         if request.data.get("send_receipt", True) not in (False, "false", "0"):
             send_receipt(payment)
         return Response(PaymentSerializer(payment).data, status=201)
@@ -306,6 +321,7 @@ class BillRent(APIView):
         body = {"period": serializer.validated_data["period"], "to_create": count, "already_billed": already}
         if not preview:
             body["created"] = count
+            record("rent.billed", f"Billed rent for {datetime.date(year, month, 1):%B %Y} to {count} tenants", area="money", period=body["period"], count=count)
         return Response(body, status=200 if preview else 201)
 
 
@@ -331,7 +347,9 @@ class Expenses(generics.ListCreateAPIView):
         return qs[:2000]
 
     def perform_create(self, serializer):
-        serializer.save(created_by=self.request.user)
+        expense = serializer.save(created_by=self.request.user)
+        record("expense.added", f"Added a cost of {usd(expense.amount_usd)}: {expense.description}" + (f" ({expense.home.address})" if expense.home_id else ""),
+               expense, area="money")
 
 
 class ExpenseDetail(generics.DestroyAPIView):
@@ -340,6 +358,10 @@ class ExpenseDetail(generics.DestroyAPIView):
 
     def get_queryset(self):
         return Expense.objects.all()
+
+    def perform_destroy(self, instance):
+        record("expense.removed", f"Removed a cost of {usd(instance.amount_usd)}: {instance.description} ({instance.date:%d %b %Y})", instance, area="money")
+        instance.delete()
 
 
 class Statement(APIView):

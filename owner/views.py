@@ -4,6 +4,7 @@ from .models import Owner
 from .serializer import OwnerReadSerializer, OwnerWriteSerializer
 from rest_framework.generics import GenericAPIView
 from rest_framework.response import Response
+from smartEstateBackend.archive import archive_owner, respond
 from rest_framework import status
 from django.shortcuts import get_object_or_404
 from smartEstateBackend.permissions import StaffReadAdminWrite
@@ -13,7 +14,7 @@ class OwnerList(GenericAPIView):
     permission_classes = [StaffReadAdminWrite]
     serializer_class = OwnerReadSerializer
     def get(self, request, format=None):
-            owners = Owner.objects.all()
+            owners = Owner.objects.filter(status=True).order_by("surname", "name")
             serializer = OwnerReadSerializer(owners, many=True)
             return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -32,6 +33,8 @@ class OwnerPaginated(GenericAPIView):
         if param(request, "search"):
             owners = search(owners, param(request, "search"), ["name", "surname", "phone_number1", "phone_number2", "email", "id_number"])
         active = flag(param(request, "status"))
+        if active is None:
+            active = True  # removed (archived) people show only when asked for
         if active is not None:
             owners = owners.filter(status=active)
         return page(request, owners, OwnerReadSerializer)
@@ -59,7 +62,6 @@ class OwnerDetails(GenericAPIView):
         
     def delete(self, request, id, format=None):
             owner = self.getObject(id)
-            owner.delete()
-            return Response(status=status.HTTP_204_NO_CONTENT)
+            return respond(owner, archive_owner)
 
 

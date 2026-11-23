@@ -44,6 +44,10 @@ class DecideRequest(APIView):
         if not isinstance(approve, bool):
             return Response({"approve": "Send true or false."}, status=400)
         household.decide(req, approve, request.user, str(request.data.get("note") or ""))
+        from audit.log import record
+
+        record("household.decided", f"{'Approved' if approve else 'Turned down'} a household request ({req.get_kind_display()}) for {req.home.address}",
+               req, area="people")
         return Response(office_row(req))
 
 

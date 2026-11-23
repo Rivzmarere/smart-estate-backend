@@ -4,6 +4,7 @@ from .models import Stand
 from .serializer import StandReadSerializer, StandWriteSerializer
 from rest_framework.generics import GenericAPIView
 from rest_framework.response import Response
+from smartEstateBackend.archive import archive_stand, respond
 from rest_framework import status
 from django.shortcuts import get_object_or_404
 from smartEstateBackend.permissions import StaffReadAdminWrite
@@ -13,7 +14,7 @@ class StandList(GenericAPIView):
     permission_classes = [StaffReadAdminWrite]
     serializer_class = StandReadSerializer
     def get(self, request, format=None):
-            stands = Stand.objects.all()
+            stands = Stand.objects.filter(status=True).order_by("stand_number")
             serializer = StandReadSerializer(stands, many=True)
             return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -59,7 +60,6 @@ class StandDetails(GenericAPIView):
         
     def delete(self, request, id, format=None):
             stand = self.getObject(id)
-            stand.delete()
-            return Response(status=status.HTTP_204_NO_CONTENT)
+            return respond(stand, archive_stand)
 
 

@@ -79,7 +79,15 @@ class MyEstate(APIView):
             return Response({"detail": "Choose an estate first."}, status=400)
         serializer = EstateSettingsSerializer(estate, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
+        secret = {f for f in serializer.validated_data if "key" in f}
+        before = {f: getattr(estate, f) for f in serializer.validated_data}
         serializer.save()
+        changed = sorted(f for f, v in before.items() if v != getattr(estate, f))
+        if changed:
+            from audit.log import record
+
+            record("settings.changed", "Changed estate settings: " + ", ".join(f.replace("_", " ") for f in changed), estate, area="settings",
+                   estate=estate, changed={f: (None if f in secret else [str(before[f]), str(getattr(estate, f))]) for f in changed})
         return Response(serializer.data)
 
 

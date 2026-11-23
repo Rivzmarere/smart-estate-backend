@@ -4,6 +4,7 @@ from .models import Provider
 from .serializer import ProviderPublicSerializer, ProviderReadSerializer, ProviderWriteSerializer
 from rest_framework.generics import GenericAPIView
 from rest_framework.response import Response
+from smartEstateBackend.archive import archive_simple, respond
 from rest_framework import status
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
@@ -65,7 +66,6 @@ class ProviderDetails(GenericAPIView):
         
     def delete(self, request, id, format=None):
             provider = self.getObject(id)
-            provider.delete()
-            return Response(status=status.HTTP_204_NO_CONTENT)
+            return respond(provider, archive_simple, f"Removed service provider {provider.name} {provider.surname}")
 
 

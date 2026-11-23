@@ -4,6 +4,7 @@ from .models import Complain
 from .serializer import ComplainReadSerializer, ComplainWriteSerializer,ComplainAssignUpdateSerializer,ComplainUpdateStatusSerializer
 from rest_framework.generics import GenericAPIView
 from rest_framework.response import Response
+from smartEstateBackend.archive import archive_simple, respond
 from rest_framework import status
 from .utilities import random_numbers,search_auth,search_home
 from django.shortcuts import get_object_or_404
@@ -71,8 +72,7 @@ class ComplainDetails(GenericAPIView):
         
     def delete(self, request, id, format=None):
             complain = self.getObject(id)
-            complain.delete()
-            return Response(status=status.HTTP_204_NO_CONTENT)
+            return respond(complain, archive_simple, f"Removed complaint {complain.complain_code} (stand {complain.stand_number})")
 
 
 class ComplainAssignDetails(GenericAPIView):

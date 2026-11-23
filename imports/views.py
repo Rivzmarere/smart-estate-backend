@@ -109,6 +109,10 @@ class RunImport(APIView):
             return Response({"ok": False, "detail": str(exc), "errors": [], "warnings": [], "preview": [], "counts": {}}, status=400)
         result = cls(estate, request.user).run(sheet, commit=self.commit, filename=upload.name or "")
         data = result.as_dict()
+        if result.batch:
+            from audit.log import record
+
+            record("import.run", f"Imported {cls.title.lower()} from {upload.name} ({result.rows} rows)", result.batch, area="data", counts=data["counts"])
         if self.commit:
             return Response(data, status=201 if result.batch else 400)
         return Response(data)
@@ -134,4 +138,7 @@ class UndoImport(APIView):
             removed = services.undo(batch, request.user)
         except services.UndoRefused as exc:
             return Response({"detail": str(exc)}, status=400)
+        from audit.log import record
+
+        record("import.undone", f"Undid the import of {batch.filename} ({removed} records removed)", batch, area="data")
         return Response({**batch_row(batch), "removed": removed})

@@ -6,6 +6,7 @@ from .models import Visit
 from .serializer import VisitBookOutSerializer, VisitBookinSerializer, VisitReadSerializer, VisitWriteSerializer
 from rest_framework.generics import GenericAPIView
 from rest_framework.response import Response
+from smartEstateBackend.archive import archive_simple, respond
 from rest_framework import status
 from .messaging import notify_visitor_arrived, send_code_to_visitor
 from .utilities import random_numbers,search_auth,search_home
@@ -83,8 +84,7 @@ class VisitDetails(GenericAPIView):
         
     def delete(self, request, id, format=None):
             visit = self.getObject(id)
-            visit.delete()
-            return Response(status=status.HTTP_204_NO_CONTENT)
+            return respond(visit, archive_simple, f"Removed visitor booking {visit.visit_code} ({visit.visitor_name}, stand {visit.stand_number})")
 
 
 

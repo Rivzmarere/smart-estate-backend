@@ -47,7 +47,10 @@ class SignUpView(GenericAPIView):
                     return Response({"estate": "Choose the estate this account belongs to."}, status=status.HTTP_400_BAD_REQUEST)
             if estate is None:
                 return Response({"estate": "No estate selected."}, status=status.HTTP_400_BAD_REQUEST)
-            serializer.save(estate=estate)
+            user = serializer.save(estate=estate)
+            from audit.log import record
+
+            record("user.created", f"Added {user.role.lower()} account {user.username} ({user.get_full_name() or 'no name'})", user, area="access", estate=estate)
             response = {"message": "User created successfully", "data": serializer.data}
             return Response(data=response, status=status.HTTP_201_CREATED)
         return Response(data=serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -83,9 +86,88 @@ class UserDetails(GenericAPIView):
         return get_object_or_404(estate_users(), pk=id)
         
     def get(self, request, id, format=None):
-            complain = self.getObject(id)
-            serializer = ReadUserSerializer(complain)
-            return Response(serializer.data, status=status.HTTP_200_OK)
+            user = self.getObject(id)
+            return Response(ReadUserSerializer(user).data, status=status.HTTP_200_OK)
+
+    def put(self, request, id, format=None):
+        """Change a staff member's name, email, role, or switch the account off / on."""
+        from django.core.validators import validate_email
+
+        from audit.log import record
+        from smartEstateBackend.permissions import ROLES
+
+        user = self.getObject(id)
+        data = request.data
+        errors, changes = {}, {}
+        for field in ("first_name", "last_name"):
+            if field in data:
+                value = str(data[field] or "").strip()[:150]
+                if field == "first_name" and not value:
+                    errors[field] = "Type a first name."
+                elif value != getattr(user, field):
+                    changes[field] = value
+        if "email" in data:
+            email = str(data["email"] or "").strip().lower()
+            if email:
+                try:
+                    validate_email(email)
+                except DjangoValidationError:
+                    errors["email"] = "That is not an email address."
+            if email != user.email:
+                changes["email"] = email
+        if "role" in data and data["role"] != user.role:
+            if data["role"] not in ROLES:
+                errors["role"] = f"Role must be one of: {', '.join(ROLES)}."
+            elif user.pk == request.user.pk:
+                errors["role"] = "You cannot change your own role. Ask another administrator."
+            else:
+                changes["role"] = data["role"]
+        if "is_active" in data:
+            active = data["is_active"] in (True, "true", "1", 1)
+            if active != user.is_active:
+                if user.pk == request.user.pk:
+                    errors["is_active"] = "You cannot switch off your own account."
+                else:
+                    changes["is_active"] = active
+        if errors:
+            return Response(errors, status=status.HTTP_400_BAD_REQUEST)
+        for field, value in changes.items():
+            setattr(user, field, value)
+        if changes:
+            user.save(update_fields=list(changes))
+            words = []
+            if "is_active" in changes:
+                words.append("switched the account on" if user.is_active else "switched the account off")
+            if "role" in changes:
+                words.append(f"made them {user.role}")
+            if {"first_name", "last_name", "email"} & set(changes):
+                words.append("changed their details")
+            record("user.changed", f"{user.username}: " + ", ".join(words), user, area="access", estate=user.estate,
+                   changed={k: str(v) for k, v in changes.items()})
+        return Response(ReadUserSerializer(user).data)
+
+
+class ResetUserPassword(GenericAPIView):
+    """POST: give a staff member who forgot their password a new temporary one (shown once to the admin)."""
+
+    permission_classes = [IsAdminRole]
+
+    def post(self, request, id):
+        import secrets
+
+        from audit.log import record
+
+        user = get_object_or_404(estate_users(), pk=id)
+        if user.pk == request.user.pk:
+            return Response({"detail": "Change your own password on My account."}, status=status.HTTP_400_BAD_REQUEST)
+        if user.is_superuser and not request.user.is_superuser:
+            return Response({"detail": "Only Smart Estate can reset this account."}, status=status.HTTP_403_FORBIDDEN)
+        alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789"
+        temporary = "Se-" + "".join(secrets.choice(alphabet) for _ in range(4)) + "-" + "".join(secrets.choice(alphabet) for _ in range(4))
+        user.set_password(temporary)
+        user.save(update_fields=["password"])
+        record("user.password_reset", f"Reset the password of {user.username}", user, area="access", estate=user.estate)
+        return Response({"username": user.username, "password": temporary})
 
 
 class MyTokenObtainPairSerializer(TokenObtainPairSerializer):

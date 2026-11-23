@@ -5,6 +5,7 @@ from .models import Home
 from .serializer import HomeReadSerializer, HomeWriteSerializer,HomeStatusUpdateSerializer
 from rest_framework.generics import GenericAPIView
 from rest_framework.response import Response
+from smartEstateBackend.archive import archive_home, respond
 from rest_framework import status
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
@@ -64,8 +65,7 @@ class HomeDetails(GenericAPIView):
         
     def delete(self, request, id, format=None):
             home = self.getObject(id)
-            home.delete()
-            return Response(status=status.HTTP_204_NO_CONTENT)
+            return respond(home, archive_home)
 
 
 

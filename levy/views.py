@@ -10,6 +10,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from audit.log import record, usd
 from estates.context import use_estate
 from home.models import Home
 from smartEstateBackend.permissions import IsAdminRole
@@ -37,7 +38,9 @@ class ExchangeRates(generics.ListCreateAPIView):
         existing = ExchangeRate.objects.filter(effective_from=request.data.get("effective_from")).first() if request.data.get("effective_from") else None
         serializer = self.get_serializer(existing, data=request.data)
         serializer.is_valid(raise_exception=True)
-        serializer.save(created_by=request.user)
+        rate = serializer.save(created_by=request.user)
+        record("rate.set", f"Set the ZiG rate to {rate.zig_per_usd} per USD from {rate.effective_from:%d %b %Y}", rate, area="money",
+               replaced=str(existing.zig_per_usd) if existing else None)
         return Response(serializer.data, status=200 if existing else 201)
 
 
@@ -64,7 +67,8 @@ class Invoices(generics.ListCreateAPIView):
         return qs[:2000]
 
     def perform_create(self, serializer):
-        serializer.save(created_by=self.request.user)
+        invoice = serializer.save(created_by=self.request.user)
+        record("invoice.created", f"Billed {usd(invoice.amount_usd)} to {invoice.address}: {invoice.description}", invoice, area="money")
 
 
 class GenerateLevies(APIView):
@@ -93,6 +97,8 @@ class GenerateLevies(APIView):
                     created_by=request.user,
                 )
         result["created"] = len(homes)
+        record("levies.generated", f"Billed the levy for {period:%B %Y} to {len(homes)} homes at {usd(data['amount_usd'])} each",
+               area="money", period=period, homes=len(homes), amount_usd=data["amount_usd"])
         return Response(result, status=201)
 
 
@@ -108,6 +114,8 @@ class VoidInvoice(APIView):
         invoice.void = True
         invoice.void_reason = serializer.validated_data["reason"]
         invoice.save(update_fields=["void", "void_reason"])
+        record("invoice.voided", f"Cancelled invoice {invoice.number} ({usd(invoice.amount_usd)}, {invoice.address}): {invoice.void_reason}",
+               invoice, area="money")
         return Response(InvoiceSerializer(invoice).data)
 
 
@@ -186,8 +194,31 @@ class Payments(generics.ListCreateAPIView):
     def perform_create(self, serializer):
         payment = serializer.save(recorded_by=self.request.user, status=Payment.PENDING, channel=Payment.OFFICE)
         payment.mark_paid()
+        record("payment.recorded", f"Recorded {usd(payment.amount_usd)} {payment.get_method_display()} for {payment.home.address} (receipt {payment.receipt_number})",
+               payment, area="money", currency=payment.currency, amount=payment.amount, reference=payment.reference)
         if self.request.data.get("send_receipt", True) not in (False, "false", "0"):
             send_receipt(payment)
+
+
+class ReversePayment(APIView):
+    """POST {reason}: a payment recorded by mistake (wrong home or amount) stops counting. Kept in the history."""
+
+    permission_classes = [IsAdminRole]
+
+    def post(self, request, id):
+        reason = str(request.data.get("reason") or "").strip()[:200]
+        if len(reason) < 3:
+            return Response({"reason": "Say why the payment is reversed."}, status=400)
+        with transaction.atomic():
+            payment = get_object_or_404(Payment.objects.select_for_update().select_related("home"), pk=id)
+            if payment.status != Payment.PAID:
+                return Response({"detail": "Only a paid payment can be reversed."}, status=400)
+            payment.status = Payment.CANCELLED
+            payment.failure_reason = f"Reversed by {request.user.get_full_name() or request.user.username}: {reason}"
+            payment.save(update_fields=["status", "failure_reason"])
+        record("payment.reversed", f"Reversed {usd(payment.amount_usd)} (receipt {payment.receipt_number}) for {payment.home.address}: {reason}",
+               payment, area="money")
+        return Response(PaymentSerializer(payment).data)
 
 
 class PaynowResult(APIView):

@@ -1,11 +1,13 @@
 from django.urls import path
 
 from . import org_views as org
+from .platform_views import PlatformUsage
 from . import sandbox_views as sb
 from .views import EstateDetail, EstateFirstAdmin, Estates, MyEstate, PublicEstate
 
 urlpatterns = [
     path("estates", Estates.as_view()),
+    path("platform/usage", PlatformUsage.as_view()),
     path("estates/<int:id>", EstateDetail.as_view()),
     path("estates/<int:id>/admin", EstateFirstAdmin.as_view()),
     path("estate", MyEstate.as_view()),

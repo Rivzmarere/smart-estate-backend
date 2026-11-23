@@ -1,7 +1,7 @@
 from django.urls import path
 
 from .views import (
-    AccountStatement, Accounts, ExchangeRates, GenerateLevies, Invoices, PaynowResult, Payments, VoidInvoice,
+    AccountStatement, Accounts, ExchangeRates, GenerateLevies, Invoices, PaynowResult, Payments, ReversePayment, VoidInvoice,
 )
 
 urlpatterns = [
@@ -12,5 +12,6 @@ urlpatterns = [
     path("levies/accounts", Accounts.as_view()),
     path("levies/accounts/<int:home_id>", AccountStatement.as_view()),
     path("levies/payments", Payments.as_view()),
+    path("levies/payments/<int:id>/reverse", ReversePayment.as_view()),
     path("paynow/result/<int:payment_id>", PaynowResult.as_view()),
 ]

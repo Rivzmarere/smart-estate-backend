@@ -5,6 +5,7 @@ from .models import WhiteList,WhiteListGuest
 from .serializer import WhiteListBookInSerializer, WhiteListBookOutSerializer, WhiteListGuestReadSerializer, WhiteListGuestWriteSerializer, WhiteListReadSerializer
 from rest_framework.generics import GenericAPIView
 from rest_framework.response import Response
+from smartEstateBackend.archive import archive_simple, respond
 from rest_framework import status
 from visit.utilities import random_numbers,search_auth,search_home
 from django.db.models import Q
@@ -67,8 +68,7 @@ class WhiteListGuestDetails(GenericAPIView):
         
     def delete(self, request, id, format=None):
             white_list_guest = self.getObject(id)
-            white_list_guest.delete()
-            return Response(status=status.HTTP_204_NO_CONTENT)
+            return respond(white_list_guest, archive_simple, f"Removed regular visitor {white_list_guest.visitor_name} (stand {white_list_guest.stand_number})")
 
 
 

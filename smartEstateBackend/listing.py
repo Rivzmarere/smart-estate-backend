@@ -61,3 +61,13 @@ def page(request, queryset, serializer, per_page=PER_PAGE, **serializer_kwargs):
     start = (number_ - 1) * size
     rows = serializer(queryset[start:start + size], many=True, **serializer_kwargs).data
     return Response({"data": rows, "total": total, "page": number_, "per_page": size, "last_page": max(1, math.ceil(total / size))})
+
+
+def form_data(request, model):
+    """Request data with empty choices ("" from a cleared dropdown) as None, so optional links can be emptied."""
+    data = request.data.copy() if hasattr(request.data, "copy") else dict(request.data)
+    links = {f.name for f in model._meta.get_fields() if getattr(f, "many_to_one", False)}
+    for name in links:
+        if name in data and data[name] in ("", "null", "undefined"):
+            data[name] = None
+    return data

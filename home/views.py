@@ -1,4 +1,4 @@
-from smartEstateBackend.listing import flag, number, page, param, search
+from smartEstateBackend.listing import form_data, flag, number, page, param, search
 import math
 import re
 from .models import Home
@@ -57,10 +57,12 @@ class HomeDetails(GenericAPIView):
 
     def put(self, request, id, format=None):
             home = self.getObject(id)
-            serializer = HomeStatusUpdateSerializer(home, data=request.data)
+            # Every field on the form is saved (links like gender, owner or resident included); fields not sent stay as they are.
+            serializer = HomeWriteSerializer(home, data=form_data(request, Home), partial=True)
             if serializer.is_valid():
                 serializer.save()
-                return Response(serializer.data, status=status.HTTP_201_CREATED)
+                home.refresh_from_db()
+                return Response(HomeReadSerializer(home).data, status=status.HTTP_200_OK)
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         
     def delete(self, request, id, format=None):

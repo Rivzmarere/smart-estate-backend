@@ -171,3 +171,34 @@ class SharedListTests(APITestCase):
         self.assertFalse(female.status)
         self.assertEqual(Owner.all_estates.filter(gender=female).count(), owners, "owners are untouched")
         self.assertNotIn(female.id, [g["id"] for g in self.client.get("/parameters/gender").json()])
+
+
+class EditingTests(APITestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.estate, logins = sandbox_seed.create_sandbox("Editing Park")
+        cls.admin = User.objects.get(username=logins[0][1])
+
+    def setUp(self):
+        self.client.force_authenticate(self.admin)
+
+    def test_edits_save_every_field(self):
+        from parameters.models.models_gender import Gender
+
+        home = Home.all_estates.filter(estate=self.estate, resident__isnull=False).order_by("stand__stand_number").first()
+        other = Home.all_estates.filter(estate=self.estate, resident__isnull=True).first()
+        owner = home.owner
+        male = Gender.objects.get(name="Male")
+        response = self.client.put(f"/owner/{owner.id}", {"phone_number1": "0779999001", "gender": male.id}, format="json")
+        self.assertEqual(response.status_code, 200, response.content)
+        owner.refresh_from_db()
+        self.assertEqual((owner.phone_number1, owner.gender_id), ("0779999001", male.id))
+        # Moving the resident to another home, and emptying a choice.
+        response = self.client.put(f"/home/{other.id}", {"resident": home.resident_id, "owner": owner.id}, format="json")
+        self.assertEqual(response.status_code, 200, response.content)
+        other.refresh_from_db()
+        self.assertEqual((other.resident_id, other.owner_id), (home.resident_id, owner.id))
+        self.assertEqual(self.client.put(f"/home/{other.id}", {"resident": ""}, format="json").status_code, 200)
+        other.refresh_from_db()
+        self.assertIsNone(other.resident_id)
+        self.assertEqual(self.client.put(f"/resident/{home.resident_id}", {"gender": ""}, format="json").status_code, 200)

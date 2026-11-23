@@ -1,4 +1,4 @@
-from smartEstateBackend.listing import flag, number, page, param, search
+from smartEstateBackend.listing import form_data, flag, number, page, param, search
 import math
 from .models import Provider
 from .serializer import ProviderPublicSerializer, ProviderReadSerializer, ProviderWriteSerializer
@@ -58,10 +58,12 @@ class ProviderDetails(GenericAPIView):
 
     def put(self, request, id, format=None):
             provider = self.getObject(id)
-            serializer = ProviderReadSerializer(provider, data=request.data)
+            # Every field on the form is saved (links like gender, owner or resident included); fields not sent stay as they are.
+            serializer = ProviderWriteSerializer(provider, data=form_data(request, Provider), partial=True)
             if serializer.is_valid():
                 serializer.save()
-                return Response(serializer.data, status=status.HTTP_201_CREATED)
+                provider.refresh_from_db()
+                return Response(ProviderReadSerializer(provider).data, status=status.HTTP_200_OK)
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         
     def delete(self, request, id, format=None):

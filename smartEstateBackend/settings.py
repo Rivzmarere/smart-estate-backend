@@ -125,6 +125,7 @@ SIMPLE_JWT = {
     "REFRESH_TOKEN_LIFETIME": timedelta(days=1),
     "SIGNING_KEY": SECRET_KEY,
     "AUTH_HEADER_TYPES": ("Bearer",),
+    "UPDATE_LAST_LOGIN": True,  # "last signed in" on My account and the users list
 }
 AUTH_USER_MODEL = "authentication.User"
 

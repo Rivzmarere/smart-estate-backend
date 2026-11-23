@@ -48,3 +48,13 @@ class MyAccountTests(APITestCase):
         self.client.force_authenticate(None)
         self.assertEqual(self.client.get("/account").status_code, 401)
         self.assertEqual(self.client.post("/account/password", {}).status_code, 401)
+
+
+class LastLoginTests(APITestCase):
+    def test_signing_in_records_the_time(self):
+        cache.clear()
+        user = User.objects.create_user(username="ll-user", password="Some-pass-123!", role=ROLE_GUARD)
+        self.assertIsNone(user.last_login)
+        self.assertEqual(self.client.post("/token", {"username": "ll-user", "password": "Some-pass-123!"}).status_code, 200)
+        user.refresh_from_db()
+        self.assertIsNotNone(user.last_login)

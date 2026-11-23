@@ -12,7 +12,7 @@ class ProviderCategoryList(GenericAPIView):
     permission_classes = [SharedListPermission]
     serializer_class = ProviderCategoryReadSerializer
     def get(self, request, format=None):
-            provider_category = ProviderCategory.objects.all()
+            provider_category = ProviderCategory.objects.filter(status=True)
             serializer = ProviderCategoryReadSerializer(provider_category, many=True)
             return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -78,7 +78,9 @@ class ProviderCategoryDetails(GenericAPIView):
         
     def delete(self, request, id, format=None):
             provider_category = self.getObject(id)
-            provider_category.delete()
+            # Shared by every estate and linked to their records: archive, never delete.
+            provider_category.status = False
+            provider_category.save(update_fields=["status"])
             return Response(status=status.HTTP_204_NO_CONTENT)
 
 

@@ -153,3 +153,21 @@ class PlatformUsageTests(APITestCase):
         self.assertIn("monthly_bill_usd", data["totals"])
         self.client.force_authenticate(admin)
         self.assertEqual(self.client.get("/platform/usage").status_code, 403)
+
+
+class SharedListTests(APITestCase):
+    def test_removing_an_option_never_removes_records(self):
+        from parameters.models.models_gender import Gender
+
+        estate, _ = sandbox_seed.create_sandbox("Options Park")
+        platform = User.objects.create_superuser(username="options-platform", password="S3cure-pass!", role="Admin")
+        female = Gender.objects.get(name="Female")
+        owners = Owner.all_estates.filter(gender=female).count()
+        self.assertGreater(owners, 0)
+        self.client.force_authenticate(platform)
+        response = self.client.delete(f"/parameters/gender-category/{female.id}")
+        self.assertEqual(response.status_code, 204, response.content)
+        female.refresh_from_db()
+        self.assertFalse(female.status)
+        self.assertEqual(Owner.all_estates.filter(gender=female).count(), owners, "owners are untouched")
+        self.assertNotIn(female.id, [g["id"] for g in self.client.get("/parameters/gender").json()])

@@ -12,7 +12,7 @@ class GenderList(GenericAPIView):
     permission_classes = [SharedListPermission]
     serializer_class = GenderReadSerializer
     def get(self, request, format=None):
-            gender = Gender.objects.all()
+            gender = Gender.objects.filter(status=True)
             serializer = GenderReadSerializer(gender, many=True)
             return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -78,7 +78,9 @@ class GenderDetails(GenericAPIView):
         
     def delete(self, request, id, format=None):
             gender = self.getObject(id)
-            gender.delete()
+            # Shared by every estate and linked to their records: archive, never delete.
+            gender.status = False
+            gender.save(update_fields=["status"])
             return Response(status=status.HTTP_204_NO_CONTENT)
 
 

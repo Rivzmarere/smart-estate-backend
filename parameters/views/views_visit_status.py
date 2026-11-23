@@ -12,7 +12,7 @@ class VisitStatusList(GenericAPIView):
     permission_classes = [SharedListPermission]
     serializer_class = VisitStatusReadSerializer
     def get(self, request, format=None):
-            visit_status = VisitStatus.objects.all()
+            visit_status = VisitStatus.objects.filter(status=True)
             serializer = VisitStatusReadSerializer(visit_status, many=True)
             return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -78,7 +78,9 @@ class VisitStatusDetails(GenericAPIView):
         
     def delete(self, request, id, format=None):
             visit_status = self.getObject(id)
-            visit_status.delete()
+            # Shared by every estate and linked to their records: archive, never delete.
+            visit_status.status = False
+            visit_status.save(update_fields=["status"])
             return Response(status=status.HTTP_204_NO_CONTENT)
 
 

@@ -12,7 +12,7 @@ class ProviderStatusList(GenericAPIView):
     permission_classes = [SharedListPermission]
     serializer_class = ProviderStatusReadSerializer
     def get(self, request, format=None):
-            provider_status = ProviderStatus.objects.all()
+            provider_status = ProviderStatus.objects.filter(status=True)
             serializer = ProviderStatusReadSerializer(provider_status, many=True)
             return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -78,7 +78,9 @@ class ProviderStatusDetails(GenericAPIView):
         
     def delete(self, request, id, format=None):
             provider_status = self.getObject(id)
-            provider_status.delete()
+            # Shared by every estate and linked to their records: archive, never delete.
+            provider_status.status = False
+            provider_status.save(update_fields=["status"])
             return Response(status=status.HTTP_204_NO_CONTENT)
 
 

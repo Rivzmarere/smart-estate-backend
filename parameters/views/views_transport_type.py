@@ -12,7 +12,7 @@ class TransportTypeList(GenericAPIView):
     permission_classes = [SharedListPermission]
     serializer_class = TransportTypeReadSerializer
     def get(self, request, format=None):
-            transport_type = TransportType.objects.all()
+            transport_type = TransportType.objects.filter(status=True)
             serializer = TransportTypeReadSerializer(transport_type, many=True)
             return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -78,7 +78,9 @@ class TransportTypeDetails(GenericAPIView):
         
     def delete(self, request, id, format=None):
             transport_type = self.getObject(id)
-            transport_type.delete()
+            # Shared by every estate and linked to their records: archive, never delete.
+            transport_type.status = False
+            transport_type.save(update_fields=["status"])
             return Response(status=status.HTTP_204_NO_CONTENT)
 
 

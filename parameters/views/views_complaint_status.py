@@ -12,7 +12,7 @@ class ComplaintStatusList(GenericAPIView):
     permission_classes = [SharedListPermission]
     serializer_class = ComplaintStatusReadSerializer
     def get(self, request, format=None):
-            complaint_status = ComplaintStatus.objects.all()
+            complaint_status = ComplaintStatus.objects.filter(status=True)
             serializer = ComplaintStatusReadSerializer(complaint_status, many=True)
             return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -79,7 +79,9 @@ class ComplaintStatusDetails(GenericAPIView):
         
     def delete(self, request, id, format=None):
             complaint_status = self.getObject(id)
-            complaint_status.delete()
+            # Shared by every estate and linked to their records: archive, never delete.
+            complaint_status.status = False
+            complaint_status.save(update_fields=["status"])
             return Response(status=status.HTTP_204_NO_CONTENT)
 
 

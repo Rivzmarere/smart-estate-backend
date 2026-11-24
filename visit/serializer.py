@@ -18,6 +18,7 @@ class VisitWriteSerializer(StampAuthorizedBy, serializers.ModelSerializer):
     class Meta:
         model = Visit
         fields = ['stand_number','resident_phone_number','visitor_name','visitor_phone_number','transport_type','visit_status']
+        extra_kwargs = {"visit_status": {"required": False}}  # a new booking is "Expected" unless said otherwise
 
     def validate_visitor_phone_number(self, value):
         if value in (None, ""):

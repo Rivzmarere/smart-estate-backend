@@ -32,7 +32,14 @@ class VisitList(GenericAPIView):
                 if (is_visit_valid == True):
                     home_address =search_home(request.data["stand_number"])
                     visit_code = random_numbers()
-                    visit = serializer.save(visit_code=visit_code,home=home_address["address"])
+                    extra = {}
+                    if not serializer.validated_data.get("visit_status"):
+                        from parameters.models.models_visit_status import VisitStatus
+
+                        extra["visit_status"] = (VisitStatus.objects.filter(name__iexact="Expected", status=True).first()
+                                                 or VisitStatus.objects.filter(name__iexact="Coming").first()
+                                                 or VisitStatus.objects.order_by("id").first())
+                    visit = serializer.save(visit_code=visit_code, home=home_address["address"], **extra)
                     sms_sent = send_code_to_visitor(visit)
                     return Response({
                         "data":{
@@ -42,9 +49,8 @@ class VisitList(GenericAPIView):
                             }
                         }, status=status.HTTP_201_CREATED)
                 else:
-                    message ={"Stand Number or Phone Numebr is Invalid"}
-                    return Response(data=message,status=status.HTTP_400_BAD_REQUEST)
-            return Response(status=status.HTTP_400_BAD_REQUEST)
+                    return Response({"detail": "That stand number and phone number do not belong to the same home."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class VisitPaginated(GenericAPIView):
     permission_classes = [IsAdminOrGuard]

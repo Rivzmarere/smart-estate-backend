@@ -4,12 +4,15 @@ from parameters.serializers.serializer_complaint_status import ComplaintStatusRe
 from rest_framework.generics import GenericAPIView
 from rest_framework.response import Response
 from rest_framework import status
+from django.shortcuts import get_object_or_404
+from smartEstateBackend.permissions import SharedListPermission
 # Create your views here.
 
 class ComplaintStatusList(GenericAPIView):
+    permission_classes = [SharedListPermission]
     serializer_class = ComplaintStatusReadSerializer
     def get(self, request, format=None):
-            complaint_status = ComplaintStatus.objects.all()
+            complaint_status = ComplaintStatus.objects.filter(status=True)
             serializer = ComplaintStatusReadSerializer(complaint_status, many=True)
             return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -21,13 +24,14 @@ class ComplaintStatusList(GenericAPIView):
             return Response(status=status.HTTP_400_BAD_REQUEST)
 
 class ComplaintStatusPaginated(GenericAPIView):
+    permission_classes = [SharedListPermission]
     serializer_class = ComplaintStatusReadSerializer
     def get(self, request, format=None):
         sort = 'asc'
         page = int(request.GET.get('page',1))
         status_filter = request.GET.get('status')
         search = request.GET.get('search')
-        per_page = 5
+        per_page = 20
 
         complaint_status = ComplaintStatus.objects.all()
         
@@ -55,12 +59,10 @@ class ComplaintStatusPaginated(GenericAPIView):
 
 
 class ComplaintStatusDetails(GenericAPIView):
+    permission_classes = [SharedListPermission]
     serializer_class = ComplaintStatusReadSerializer
     def getObject(self, id):
-        try:
-            return ComplaintStatus.objects.get(pk=id)
-        except ComplaintStatus.DoesNotExist:
-            return Response(status=status.HTTP_404_NOT_FOUND)
+        return get_object_or_404(ComplaintStatus, pk=id)
         
     def get(self, request, id, format=None):
             complaint_status = self.getObject(id)
@@ -77,7 +79,9 @@ class ComplaintStatusDetails(GenericAPIView):
         
     def delete(self, request, id, format=None):
             complaint_status = self.getObject(id)
-            complaint_status.delete()
+            # Shared by every estate and linked to their records: archive, never delete.
+            complaint_status.status = False
+            complaint_status.save(update_fields=["status"])
             return Response(status=status.HTTP_204_NO_CONTENT)
 
 

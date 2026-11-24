@@ -4,12 +4,15 @@ from parameters.serializers.serializer_gender import GenderReadSerializer, Gende
 from rest_framework.generics import GenericAPIView
 from rest_framework.response import Response
 from rest_framework import status
+from django.shortcuts import get_object_or_404
+from smartEstateBackend.permissions import SharedListPermission
 # Create your views here.
 
 class GenderList(GenericAPIView):
+    permission_classes = [SharedListPermission]
     serializer_class = GenderReadSerializer
     def get(self, request, format=None):
-            gender = Gender.objects.all()
+            gender = Gender.objects.filter(status=True)
             serializer = GenderReadSerializer(gender, many=True)
             return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -21,11 +24,12 @@ class GenderList(GenericAPIView):
             return Response(status=status.HTTP_400_BAD_REQUEST)
 
 class GenderPaginated(GenericAPIView):
+    permission_classes = [SharedListPermission]
     serializer_class = GenderReadSerializer
     def get(self, request, format=None):
         sort = 'asc'
         page = int(request.GET.get('page',1))
-        per_page = 5
+        per_page = 20
         status_filter = request.GET.get('status')
         search = request.GET.get('search')
         gender = Gender.objects.all()
@@ -54,12 +58,10 @@ class GenderPaginated(GenericAPIView):
 
 
 class GenderDetails(GenericAPIView):
+    permission_classes = [SharedListPermission]
     serializer_class = GenderReadSerializer
     def getObject(self, id):
-        try:
-            return Gender.objects.get(pk=id)
-        except Gender.DoesNotExist:
-            return Response(status=status.HTTP_404_NOT_FOUND)
+        return get_object_or_404(Gender, pk=id)
         
     def get(self, request, id, format=None):
             gender = self.getObject(id)
@@ -76,7 +78,9 @@ class GenderDetails(GenericAPIView):
         
     def delete(self, request, id, format=None):
             gender = self.getObject(id)
-            gender.delete()
+            # Shared by every estate and linked to their records: archive, never delete.
+            gender.status = False
+            gender.save(update_fields=["status"])
             return Response(status=status.HTTP_204_NO_CONTENT)
 
 

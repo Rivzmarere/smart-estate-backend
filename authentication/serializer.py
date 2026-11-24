@@ -1,6 +1,8 @@
 from rest_framework import serializers
-from rest_framework.authtoken.models import Token
 from rest_framework.validators import ValidationError
+from django.contrib.auth.password_validation import validate_password
+
+from smartEstateBackend.permissions import ROLES
 from .models import User
 
 
@@ -8,6 +10,16 @@ class SignUpSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ["username", "password","role","first_name","last_name"]
+        extra_kwargs = {"password": {"write_only": True}}
+
+    def validate_role(self, value):
+        if value not in ROLES:
+            raise ValidationError(f"Role must be one of: {', '.join(ROLES)}")
+        return value
+
+    def validate_password(self, value):
+        validate_password(value)
+        return value
 
     def validate(self, attrs):
 
@@ -27,7 +39,6 @@ class SignUpSerializer(serializers.ModelSerializer):
 
         user.save()
 
-        Token.objects.create(user=user)
 
         return user
 
@@ -35,24 +46,13 @@ class SignUpSerializer(serializers.ModelSerializer):
 class ReadUserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ["id","role", "username",'is_active','first_name','last_name','date_joined']
+        fields = ["id", "role", "username", "is_active", "first_name", "last_name", "email", "date_joined", "last_login"]
 
 
 
-class ChangePasswordSerializer(serializers.Serializer):
-    model = User
-
-    """
-    Serializer for password change endpoint.
-    """
-    old_password = serializers.CharField(required=True)
-    new_password = serializers.CharField(required=True)
-
-
-class UpdateUserSerializer(serializers.ModelSerializer):
-    email = serializers.EmailField(required=True)
+class UserSummarySerializer(serializers.ModelSerializer):
+    """Safe nested representation of a user (never exposes the password hash)."""
 
     class Meta:
         model = User
-        fields = ('username',)
-
+        fields = ["id", "username", "first_name", "last_name", "role"]

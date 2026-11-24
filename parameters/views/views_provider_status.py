@@ -4,12 +4,15 @@ from parameters.serializers.serializer_provider_status import ProviderStatusRead
 from rest_framework.generics import GenericAPIView
 from rest_framework.response import Response
 from rest_framework import status
+from django.shortcuts import get_object_or_404
+from smartEstateBackend.permissions import SharedListPermission
 # Create your views here.
 
 class ProviderStatusList(GenericAPIView):
+    permission_classes = [SharedListPermission]
     serializer_class = ProviderStatusReadSerializer
     def get(self, request, format=None):
-            provider_status = ProviderStatus.objects.all()
+            provider_status = ProviderStatus.objects.filter(status=True)
             serializer = ProviderStatusReadSerializer(provider_status, many=True)
             return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -21,13 +24,14 @@ class ProviderStatusList(GenericAPIView):
             return Response(status=status.HTTP_400_BAD_REQUEST)
 
 class ProviderStatusPaginated(GenericAPIView):
+    permission_classes = [SharedListPermission]
     serializer_class = ProviderStatusReadSerializer
     def get(self, request, format=None):
         sort = 'asc'
         page = int(request.GET.get('page',1))
         status_filter = request.GET.get('status')
         search = request.GET.get('search')
-        per_page = 5
+        per_page = 20
 
         provider_status = ProviderStatus.objects.all()
         
@@ -54,12 +58,10 @@ class ProviderStatusPaginated(GenericAPIView):
 
 
 class ProviderStatusDetails(GenericAPIView):
+    permission_classes = [SharedListPermission]
     serializer_class = ProviderStatusReadSerializer
     def getObject(self, id):
-        try:
-            return ProviderStatus.objects.get(pk=id)
-        except ProviderStatus.DoesNotExist:
-            return Response(status=status.HTTP_404_NOT_FOUND)
+        return get_object_or_404(ProviderStatus, pk=id)
         
     def get(self, request, id, format=None):
             provider_status = self.getObject(id)
@@ -76,7 +78,9 @@ class ProviderStatusDetails(GenericAPIView):
         
     def delete(self, request, id, format=None):
             provider_status = self.getObject(id)
-            provider_status.delete()
+            # Shared by every estate and linked to their records: archive, never delete.
+            provider_status.status = False
+            provider_status.save(update_fields=["status"])
             return Response(status=status.HTTP_204_NO_CONTENT)
 
 

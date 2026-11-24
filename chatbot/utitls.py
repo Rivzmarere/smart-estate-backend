@@ -1,7 +1,6 @@
 def chatResponse(body):
     request_arra = []
     request_arra.append(body)
-    print(request_arra)
     if body:
         match body:
             case "1":

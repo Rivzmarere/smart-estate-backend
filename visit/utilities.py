@@ -1,40 +1,51 @@
+"""
+Helpers shared by visitor bookings, whitelist guests and complaints.
+"""
 
+import re
 import secrets
-import string
+
 from home.models import Home
-from home.serializer import HomeReadSerializer
-from resident.models import Resident
 
-from stand.models import Stand
-from django.db.models import Q
- 
-# initializing size of string
-N = 5
+# No 0/O or 1/I, so codes are easy to read out at the gate.
+CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+CODE_LENGTH = 6
 
-def random_numbers():
-    # using secrets.choice()
-    # generating random strings
-    res = ''.join(secrets.choice(string.ascii_uppercase + string.digits)
-                for i in range(N))
-    return res
 
-def search_auth(stand,phone_number):
-    stand_number_exists = Stand.objects.filter(stand_number=stand).exists()
+def random_numbers(length=CODE_LENGTH):
+    """Return a random, human-friendly access code."""
+    return "".join(secrets.choice(CODE_ALPHABET) for _ in range(length))
 
-    if stand_number_exists:
-        phone_number_exists = Resident.objects.filter(Q(phone_number1=phone_number) | Q(phone_number2=phone_number)| Q(phone_number3=phone_number)| Q(phone_number4=phone_number)).exists()
-        if phone_number_exists:
-            res = True
-        else:
-            res = False
-    
+
+def phone_variants(phone_number):
+    """
+    Zimbabwean numbers are written as 0771234567, +263771234567 or 263771234567.
+    Return every spelling so a match works whichever one was stored.
+    """
+    raw = str(phone_number or "").strip()
+    digits = re.sub(r"\D", "", raw)
+    if not digits:
+        return set()
+    if digits.startswith("263"):
+        local = digits[3:]
+    elif digits.startswith("0"):
+        local = digits[1:]
     else:
-        res = False
-    
-    return res
+        local = digits
+    return {raw, digits, "0" + local, "263" + local, "+263" + local}
+
+
+def search_auth(stand, phone_number, action="visitors"):
+    """
+    True only if this phone number belongs to a home on this stand (as its
+    resident, a household member or its owner) and may do this there.
+    """
+    from portal.access import homes_for_phone
+
+    return any(a.home.stand.stand_number == int(stand) for a in homes_for_phone(phone_number, action=action))
+
 
 def search_home(stand):
-    stand_number = Home.objects.get(stand__stand_number=stand)
-    serializer = HomeReadSerializer(stand_number)
-    return serializer.data
-    
+    """Return the home on this stand as a dict with at least an ``address`` key."""
+    home = Home.objects.filter(stand__stand_number=stand, status=True).first()
+    return {"address": home.address if home else ""}

@@ -4,12 +4,15 @@ from parameters.serializers.serializer_home_status import HomeStatusReadSerializ
 from rest_framework.generics import GenericAPIView
 from rest_framework.response import Response
 from rest_framework import status
+from django.shortcuts import get_object_or_404
+from smartEstateBackend.permissions import SharedListPermission
 # Create your views here.
 
 class HomeStatusList(GenericAPIView):
+    permission_classes = [SharedListPermission]
     serializer_class = HomeStatusReadSerializer
     def get(self, request, format=None):
-            home_status = HomeStatus.objects.all()
+            home_status = HomeStatus.objects.filter(status=True)
             serializer = HomeStatusReadSerializer(home_status, many=True)
             return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -21,13 +24,14 @@ class HomeStatusList(GenericAPIView):
             return Response(status=status.HTTP_400_BAD_REQUEST)
 
 class HomeStatusPaginated(GenericAPIView):
+    permission_classes = [SharedListPermission]
     serializer_class = HomeStatusReadSerializer
     def get(self, request, format=None):
         sort = 'asc'
         page = int(request.GET.get('page',1))
         status_filter = request.GET.get('status')
         search = request.GET.get('search')
-        per_page = 5
+        per_page = 20
 
         home_status = HomeStatus.objects.all()
         
@@ -54,12 +58,10 @@ class HomeStatusPaginated(GenericAPIView):
 
 
 class HomeStatusDetails(GenericAPIView):
+    permission_classes = [SharedListPermission]
     serializer_class = HomeStatusReadSerializer
     def getObject(self, id):
-        try:
-            return HomeStatus.objects.get(pk=id)
-        except HomeStatus.DoesNotExist:
-            return Response(status=status.HTTP_404_NOT_FOUND)
+        return get_object_or_404(HomeStatus, pk=id)
         
     def get(self, request, id, format=None):
             home_status = self.getObject(id)
@@ -76,7 +78,9 @@ class HomeStatusDetails(GenericAPIView):
         
     def delete(self, request, id, format=None):
             home_status = self.getObject(id)
-            home_status.delete()
+            # Shared by every estate and linked to their records: archive, never delete.
+            home_status.status = False
+            home_status.save(update_fields=["status"])
             return Response(status=status.HTTP_204_NO_CONTENT)
 
 

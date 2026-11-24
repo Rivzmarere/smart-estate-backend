@@ -1,13 +1,24 @@
+from smartEstateBackend.listing import flag, number, page, param, search
 import math
+
+from django.utils import timezone
 from .models import Visit
 from .serializer import VisitBookOutSerializer, VisitBookinSerializer, VisitReadSerializer, VisitWriteSerializer
 from rest_framework.generics import GenericAPIView
 from rest_framework.response import Response
+from smartEstateBackend.archive import archive_simple, respond
 from rest_framework import status
+from .messaging import notify_visitor_arrived, send_code_to_visitor
 from .utilities import random_numbers,search_auth,search_home
+from django.shortcuts import get_object_or_404
+from smartEstateBackend.permissions import IsAdminOrGuard, PublicCreateStaffRead
+from rest_framework.throttling import ScopedRateThrottle
 # Create your views here.
 
 class VisitList(GenericAPIView):
+    permission_classes = [PublicCreateStaffRead]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "public_booking"
     serializer_class = VisitReadSerializer
     def get(self, request, format=None):
             visits = Visit.objects.all()
@@ -21,64 +32,48 @@ class VisitList(GenericAPIView):
                 if (is_visit_valid == True):
                     home_address =search_home(request.data["stand_number"])
                     visit_code = random_numbers()
-                    serializer.save(visit_code=visit_code,home=home_address["address"])
+                    extra = {}
+                    if not serializer.validated_data.get("visit_status"):
+                        from parameters.models.models_visit_status import VisitStatus
+
+                        extra["visit_status"] = (VisitStatus.objects.filter(name__iexact="Expected", status=True).first()
+                                                 or VisitStatus.objects.filter(name__iexact="Coming").first()
+                                                 or VisitStatus.objects.order_by("id").first())
+                    visit = serializer.save(visit_code=visit_code, home=home_address["address"], **extra)
+                    sms_sent = send_code_to_visitor(visit)
                     return Response({
                         "data":{
                             "visit_code":visit_code,
-                            "Visitor_name":request.data["visitor_name"]
+                            "Visitor_name":request.data["visitor_name"],
+                            "sms_sent": sms_sent,
                             }
                         }, status=status.HTTP_201_CREATED)
                 else:
-                    message ={"Stand Number or Phone Numebr is Invalid"}
-                    return Response(data=message,status=status.HTTP_400_BAD_REQUEST)
-            return Response(status=status.HTTP_400_BAD_REQUEST)
+                    return Response({"detail": "That stand number and phone number do not belong to the same home."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class VisitPaginated(GenericAPIView):
+    permission_classes = [IsAdminOrGuard]
     serializer_class = VisitReadSerializer
     def get(self, request, format=None):
-        sort = 'asc'
-        page = int(request.GET.get('page',1))
-        search = request.GET.get('search')
-        transport_filter = request.GET.get('transport-filter')
-        status_filter = request.GET.get('status-filter')
-        per_page = 5
+        visits = Visit.objects.filter(status=True).order_by("-date_created")
+        if param(request, "search"):
+            visits = search(visits, param(request, "search"), ["visitor_name", "visit_code", "stand_number", "home", "visitor_vehicle_reg_number"])
+        transport = number(param(request, "transport-filter"))
+        if transport:
+            visits = visits.filter(transport_type_id=transport)
+        visit_status = number(param(request, "status-filter"))
+        if visit_status:
+            visits = visits.filter(visit_status_id=visit_status)
+        return page(request, visits, VisitReadSerializer)
 
-        visits = Visit.objects.all()
-        if search:
-            visits = visits.filter(visitor_name__icontains = search)
-        
-        if transport_filter:
-            visits = visits.filter(transport_type = transport_filter)
-            
-        if status_filter:
-            visits = visits.filter(visit_status = status_filter)
-            
-        if sort =='asc':
-            visits = visits.order_by('-date_created').filter(status=True)
-        
-        
-        
-        total = visits.count()
-        start = (page - 1) * per_page
-        end = page * per_page
-
-        serializer = VisitReadSerializer(visits[start:end], many=True)
-        return Response({
-            'data':serializer.data,
-            'total': total,
-            'page':page,
-            'last_page':math.ceil(total / per_page)
-
-        })
 
 
 class VisitDetails(GenericAPIView):
+    permission_classes = [IsAdminOrGuard]
     serializer_class = VisitReadSerializer
     def getObject(self, id):
-        try:
-            return Visit.objects.get(pk=id)
-        except Visit.DoesNotExist:
-            return Response(status=status.HTTP_404_NOT_FOUND)
+        return get_object_or_404(Visit, pk=id)
         
     def get(self, request, id, format=None):
             visit = self.getObject(id)
@@ -95,42 +90,41 @@ class VisitDetails(GenericAPIView):
         
     def delete(self, request, id, format=None):
             visit = self.getObject(id)
-            visit.delete()
-            return Response(status=status.HTTP_204_NO_CONTENT)
+            return respond(visit, archive_simple, f"Removed visitor booking {visit.visit_code} ({visit.visitor_name}, stand {visit.stand_number})")
 
 
 
 class VisitBookInUpdateDetails(GenericAPIView):
+    permission_classes = [IsAdminOrGuard]
     serializer_class = VisitReadSerializer
     def getObject(self, id):
-        try:
-            return Visit.objects.get(pk=id)
-        except Visit.DoesNotExist:
-            return Response(status=status.HTTP_404_NOT_FOUND)
+        return get_object_or_404(Visit, pk=id)
         
     def put(self, request, id, format=None):
             visit = self.getObject(id)
             serializer = VisitBookinSerializer(visit, data=request.data)
             if serializer.is_valid():
-                serializer.save()
+                visit = serializer.save(
+                    authorized_by=request.user,
+                    date_arrived=serializer.validated_data.get("date_arrived") or timezone.now(),
+                )
+                notify_visitor_arrived(visit)
                 return Response(serializer.data, status=status.HTTP_201_CREATED)
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         
 
 
 class VisitBookOutUpdateDetails(GenericAPIView):
+    permission_classes = [IsAdminOrGuard]
     serializer_class = VisitReadSerializer
     def getObject(self, id):
-        try:
-            return Visit.objects.get(pk=id)
-        except Visit.DoesNotExist:
-            return Response(status=status.HTTP_404_NOT_FOUND)
+        return get_object_or_404(Visit, pk=id)
         
     def put(self, request, id, format=None):
             visit = self.getObject(id)
             serializer = VisitBookOutSerializer(visit, data=request.data)
             if serializer.is_valid():
-                serializer.save(status=False)
+                serializer.save(status=False, date_depature=timezone.now())
                 return Response(serializer.data, status=status.HTTP_201_CREATED)
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         

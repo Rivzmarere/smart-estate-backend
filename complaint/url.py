@@ -1,5 +1,6 @@
 
 from django.urls import  path
+from .photos import ComplaintPhotoFile, ComplaintPhotos
 from .views import ComplainUpdateStatusDetails,ComplainList,ComplainPaginated,ComplainDetails,ComplainAssignDetails
 
 urlpatterns = [
@@ -8,4 +9,6 @@ urlpatterns = [
     path("complain/<int:id>",  ComplainDetails.as_view()),
     path("complain-assign/<int:id>",  ComplainAssignDetails.as_view()),
     path("complain-update-status/<int:id>",  ComplainUpdateStatusDetails.as_view()),
+    path("complain/<int:id>/photos", ComplaintPhotos.as_view()),
+    path("complain/photos/<int:photo_id>", ComplaintPhotoFile.as_view()),
 ]

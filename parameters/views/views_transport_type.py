@@ -4,12 +4,15 @@ from parameters.serializers.serializer_transport_type import TransportTypeReadSe
 from rest_framework.generics import GenericAPIView
 from rest_framework.response import Response
 from rest_framework import status
+from django.shortcuts import get_object_or_404
+from smartEstateBackend.permissions import SharedListPermission
 # Create your views here.
 
 class TransportTypeList(GenericAPIView):
+    permission_classes = [SharedListPermission]
     serializer_class = TransportTypeReadSerializer
     def get(self, request, format=None):
-            transport_type = TransportType.objects.all()
+            transport_type = TransportType.objects.filter(status=True)
             serializer = TransportTypeReadSerializer(transport_type, many=True)
             return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -21,13 +24,14 @@ class TransportTypeList(GenericAPIView):
             return Response(status=status.HTTP_400_BAD_REQUEST)
 
 class TransportTypePaginated(GenericAPIView):
+    permission_classes = [SharedListPermission]
     serializer_class = TransportTypeReadSerializer
     def get(self, request, format=None):
         sort = 'asc'
         page = int(request.GET.get('page',1))
         status_filter = request.GET.get('status')
         search = request.GET.get('search')
-        per_page = 5
+        per_page = 20
 
         transport_type = TransportType.objects.all()
         
@@ -54,12 +58,10 @@ class TransportTypePaginated(GenericAPIView):
 
 
 class TransportTypeDetails(GenericAPIView):
+    permission_classes = [SharedListPermission]
     serializer_class = TransportTypeReadSerializer
     def getObject(self, id):
-        try:
-            return TransportType.objects.get(pk=id)
-        except TransportType.DoesNotExist:
-            return Response(status=status.HTTP_404_NOT_FOUND)
+        return get_object_or_404(TransportType, pk=id)
         
     def get(self, request, id, format=None):
             transport_type = self.getObject(id)
@@ -76,7 +78,9 @@ class TransportTypeDetails(GenericAPIView):
         
     def delete(self, request, id, format=None):
             transport_type = self.getObject(id)
-            transport_type.delete()
+            # Shared by every estate and linked to their records: archive, never delete.
+            transport_type.status = False
+            transport_type.save(update_fields=["status"])
             return Response(status=status.HTTP_204_NO_CONTENT)
 
 

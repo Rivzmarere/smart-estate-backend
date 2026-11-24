@@ -4,12 +4,15 @@ from parameters.serializers.serializer_stand_status import StandStatusReadSerial
 from rest_framework.generics import GenericAPIView
 from rest_framework.response import Response
 from rest_framework import status
+from django.shortcuts import get_object_or_404
+from smartEstateBackend.permissions import SharedListPermission
 # Create your views here.
 
 class StandStatusList(GenericAPIView):
+    permission_classes = [SharedListPermission]
     serializer_class = StandStatusReadSerializer
     def get(self, request, format=None):
-            stand_status = StandStatus.objects.all()
+            stand_status = StandStatus.objects.filter(status=True)
             serializer = StandStatusReadSerializer(stand_status, many=True)
             return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -21,13 +24,14 @@ class StandStatusList(GenericAPIView):
             return Response(status=status.HTTP_400_BAD_REQUEST)
 
 class StandStatusPaginated(GenericAPIView):
+    permission_classes = [SharedListPermission]
     serializer_class = StandStatusReadSerializer
     def get(self, request, format=None):
         sort = 'asc'
         page = int(request.GET.get('page',1))
         status_filter = request.GET.get('status')
         search = request.GET.get('search')
-        per_page = 5
+        per_page = 20
 
         stand_status = StandStatus.objects.all()
         
@@ -54,12 +58,10 @@ class StandStatusPaginated(GenericAPIView):
 
 
 class StandStatusDetails(GenericAPIView):
+    permission_classes = [SharedListPermission]
     serializer_class = StandStatusReadSerializer
     def getObject(self, id):
-        try:
-            return StandStatus.objects.get(pk=id)
-        except StandStatus.DoesNotExist:
-            return Response(status=status.HTTP_404_NOT_FOUND)
+        return get_object_or_404(StandStatus, pk=id)
         
     def get(self, request, id, format=None):
             stand_status = self.getObject(id)
@@ -76,7 +78,9 @@ class StandStatusDetails(GenericAPIView):
         
     def delete(self, request, id, format=None):
             stand_status = self.getObject(id)
-            stand_status.delete()
+            # Shared by every estate and linked to their records: archive, never delete.
+            stand_status.status = False
+            stand_status.save(update_fields=["status"])
             return Response(status=status.HTTP_204_NO_CONTENT)
 
 

@@ -4,12 +4,15 @@ from parameters.serializers.serializer_provider_category import ProviderCategory
 from rest_framework.generics import GenericAPIView
 from rest_framework.response import Response
 from rest_framework import status
+from django.shortcuts import get_object_or_404
+from smartEstateBackend.permissions import SharedListPermission
 # Create your views here.
 
 class ProviderCategoryList(GenericAPIView):
+    permission_classes = [SharedListPermission]
     serializer_class = ProviderCategoryReadSerializer
     def get(self, request, format=None):
-            provider_category = ProviderCategory.objects.all()
+            provider_category = ProviderCategory.objects.filter(status=True)
             serializer = ProviderCategoryReadSerializer(provider_category, many=True)
             return Response(serializer.data, status=status.HTTP_200_OK)
 
@@ -21,13 +24,14 @@ class ProviderCategoryList(GenericAPIView):
             return Response(status=status.HTTP_400_BAD_REQUEST)
 
 class ProviderCategoryPaginated(GenericAPIView):
+    permission_classes = [SharedListPermission]
     serializer_class = ProviderCategoryReadSerializer
     def get(self, request, format=None):
         sort = 'asc'
         page = int(request.GET.get('page',1))
         status_filter = request.GET.get('status')
         search = request.GET.get('search')
-        per_page = 5
+        per_page = 20
 
         provider_category = ProviderCategory.objects.all()
         
@@ -54,12 +58,10 @@ class ProviderCategoryPaginated(GenericAPIView):
 
 
 class ProviderCategoryDetails(GenericAPIView):
+    permission_classes = [SharedListPermission]
     serializer_class = ProviderCategoryReadSerializer
     def getObject(self, id):
-        try:
-            return ProviderCategory.objects.get(pk=id)
-        except ProviderCategory.DoesNotExist:
-            return Response(status=status.HTTP_404_NOT_FOUND)
+        return get_object_or_404(ProviderCategory, pk=id)
         
     def get(self, request, id, format=None):
             provider_category = self.getObject(id)
@@ -76,7 +78,9 @@ class ProviderCategoryDetails(GenericAPIView):
         
     def delete(self, request, id, format=None):
             provider_category = self.getObject(id)
-            provider_category.delete()
+            # Shared by every estate and linked to their records: archive, never delete.
+            provider_category.status = False
+            provider_category.save(update_fields=["status"])
             return Response(status=status.HTTP_204_NO_CONTENT)
 
 

@@ -1,8 +1,12 @@
-from dataclasses import fields
 from rest_framework import serializers
+
+from authentication.serializer import UserSummarySerializer
 from .models import Complain
 
 class ComplainReadSerializer(serializers.ModelSerializer):
+    assigned_to = UserSummarySerializer(read_only=True)
+    photo_count = serializers.IntegerField(source="photos.count", read_only=True)
+
     class Meta:
         model = Complain
         fields = '__all__'
@@ -18,6 +22,13 @@ class ComplainAssignUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Complain
         fields = ["assigned_to","compalint_status"]
+
+    def validate_assigned_to(self, user):
+        from authentication.views import estate_users
+
+        if user and not estate_users().filter(pk=user.pk).exists():
+            raise serializers.ValidationError("That person does not work for this estate.")
+        return user
 
 
 class ComplainUpdateStatusSerializer(serializers.ModelSerializer):

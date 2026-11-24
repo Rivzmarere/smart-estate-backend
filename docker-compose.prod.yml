@@ -1,0 +1,98 @@
+# Production: PostgreSQL, the API, the Paynow poller, nightly backups and
+# Caddy (HTTPS + the two web apps). Expects the frontend repository next to
+# this one:  ../smart-estate-frontend   See DEPLOY.md.
+#
+#   docker compose -f docker-compose.prod.yml --env-file .env up -d --build
+
+services:
+  db:
+    image: postgres:17
+    restart: unless-stopped
+    env_file: ${ENV_FILE:-.env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  api:
+    build: .
+    restart: unless-stopped
+    env_file: ${ENV_FILE:-.env}
+    environment:
+      MEDIA_ROOT: /data/media
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - media:/data/media
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Asks Paynow about payments whose result never arrived (every 2 minutes).
+  paynow-poller:
+    build: .
+    restart: unless-stopped
+    env_file: ${ENV_FILE:-.env}
+    depends_on:
+      api:
+        condition: service_healthy
+    command: sh -c "while true; do python manage.py paynow_poll; sleep 120; done"
+
+  # Rental portfolios: bills the month's rent and reminds tenants. Runs every 6 hours; nothing is sent twice.
+  rent-run:
+    build: .
+    restart: unless-stopped
+    env_file: ${ENV_FILE:-.env}
+    depends_on:
+      api:
+        condition: service_healthy
+    command: sh -c "while true; do python manage.py rent_run; sleep 21600; done"
+
+  # Nightly database dump and media archive, kept for BACKUP_KEEP_DAYS days.
+  # Copy /backups off the server too (see DEPLOY.md).
+  backup:
+    image: postgres:17
+    restart: unless-stopped
+    env_file: ${ENV_FILE:-.env}
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./deploy/backup.sh:/backup.sh:ro
+      - backups:/backups
+      - media:/data/media:ro
+    environment:
+      TZ: Africa/Harare  # BACKUP_HOUR is Harare time
+    entrypoint: ["sh", "/backup.sh"]
+
+  web:
+    build:
+      context: ../smart-estate-frontend
+      args:
+        API_URL: https://${API_DOMAIN}/
+        PORTAL_ESTATE: ${PORTAL_ESTATE:-}
+    restart: unless-stopped
+    env_file: ${ENV_FILE:-.env}
+    depends_on:
+      - api
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  pgdata:
+  media:
+  backups:
+  caddy_data:
+  caddy_config:

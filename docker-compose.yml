@@ -1,0 +1,38 @@
+services:
+  db:
+    image: postgres:17
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    volumes:
+      - media:/data/media
+
+  # Checks Paynow for payments whose result never arrived (every 2 minutes).
+  paynow-poller:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    depends_on:
+      db:
+        condition: service_healthy
+    command: sh -c "while true; do python manage.py paynow_poll; sleep 120; done"
+
+volumes:
+  pgdata:
+  media:
